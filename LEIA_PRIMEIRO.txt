@@ -1,0 +1,25 @@
+VIRAPLAY ANDROID MVP v0.2
+
+Projeto separado dos sites/JCR Menu.
+
+Servidor configurado:
+https://viraplay-api.jcrstudio.workers.dev
+
+Módulos:
+- player: ViraPlay para Android TV, TV Box, celular e tablet
+- admin: ViraPlay ADM para o administrador
+- shared: código compartilhado
+- server: Worker Cloudflare + SQL Supabase
+
+Fluxo:
+1. O player cria um código de pareamento.
+2. O cliente envia o código.
+3. No ADM, o administrador informa o código, nome do aparelho e URL M3U autorizada.
+4. O player recebe a configuração pelo Worker.
+
+Importante:
+- O ADMIN_TOKEN não está gravado no código. Ele é digitado no ViraPlay ADM na primeira abertura e salvo localmente no aparelho.
+- A chave secreta do Supabase fica somente no Cloudflare Worker.
+- O vencimento dos clientes continua no painel já existente; este projeto cuida apenas do player e dos dispositivos.
+
+Próximo passo: subir esta pasta inteira para um repositório GitHub novo e rodar o workflow Build ViraPlay APKs.

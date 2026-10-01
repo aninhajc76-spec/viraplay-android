@@ -1,0 +1,11 @@
+ViraPlay Android MVP v0.2
+
+URL da API já configurada: https://viraplay-api.jcrstudio.workers.dev
+
+Arquivos principais:
+- shared/src/main/java/com/viraplay/shared/AppConfig.kt
+- player/src/main/java/com/viraplay/player/MainActivity.kt
+- admin/src/main/java/com/viraplay/admin/MainActivity.kt
+- server/worker.js
+- server/supabase_schema.sql
+- .github/workflows/build-apks.yml
