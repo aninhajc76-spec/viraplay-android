@@ -1,0 +1,47 @@
+name: Build ViraPlay APKs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Android SDK 36
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Configurar Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Compilar ViraPlay Cliente e ADM
+        run: gradle :player:assembleDebug :admin:assembleDebug --stacktrace
+
+      - name: Enviar APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ViraPlay-APKs-debug
+          path: |
+            player/build/outputs/apk/debug/player-debug.apk
+            admin/build/outputs/apk/debug/admin-debug.apk
+          if-no-files-found: error
