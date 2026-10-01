@@ -1,0 +1,98 @@
+name: Corrigir Gradle ViraPlay
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  corrigir:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Corrigir versões Android
+        shell: bash
+        run: |
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.13.2" apply false
+              id("com.android.library") version "8.13.2" apply false
+              id("org.jetbrains.kotlin.android") version "2.4.20" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.4.20" apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > .github/workflows/build-apks.yml <<'EOF'
+          name: Build ViraPlay APKs
+
+          on:
+            workflow_dispatch:
+            push:
+              branches:
+                - main
+
+          permissions:
+            contents: read
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+
+              steps:
+                - name: Baixar projeto
+                  uses: actions/checkout@v4
+
+                - name: Configurar Java 17
+                  uses: actions/setup-java@v4
+                  with:
+                    distribution: temurin
+                    java-version: '17'
+
+                - name: Instalar Android SDK 36
+                  shell: bash
+                  run: |
+                    set -e
+                    SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+                    if [ ! -x "$SDKMANAGER" ]; then
+                      SDKMANAGER="$(command -v sdkmanager)"
+                    fi
+                    yes | "$SDKMANAGER" --licenses >/dev/null || true
+                    "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+                - name: Configurar Gradle 8.13
+                  uses: gradle/actions/setup-gradle@v4
+                  with:
+                    gradle-version: '8.13'
+
+                - name: Compilar ViraPlay Cliente e ADM
+                  run: gradle :player:assembleDebug :admin:assembleDebug --stacktrace
+
+                - name: Enviar APKs
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: ViraPlay-APKs-debug
+                    path: |
+                      player/build/outputs/apk/debug/player-debug.apk
+                      admin/build/outputs/apk/debug/admin-debug.apk
+                    if-no-files-found: error
+          EOF
+
+      - name: Salvar correções
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build.gradle.kts gradle.properties .github/workflows/build-apks.yml
+          git commit -m "Corrige Gradle e AGP do ViraPlay"
+          git push
