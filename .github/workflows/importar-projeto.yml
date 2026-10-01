@@ -2,9 +2,6 @@ name: Importar projeto ViraPlay
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'viraplay-repo-source-v0.3.zip'
 
 permissions:
   contents: write
@@ -12,30 +9,40 @@ permissions:
 jobs:
   importar:
     runs-on: ubuntu-latest
+
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v4
 
-      - name: Extrair projeto
+      - name: Extrair projeto ViraPlay
         shell: bash
         run: |
           set -e
+
           rm -rf .viraplay_tmp
           mkdir .viraplay_tmp
+
           unzip -q viraplay-repo-source-v0.3.zip -d .viraplay_tmp
-          rsync -a --exclude='.git' .viraplay_tmp/ ./
+
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github/workflows/build-apks.yml' \
+            .viraplay_tmp/ ./
+
           rm -rf .viraplay_tmp
           rm -f viraplay-repo-source-v0.3.zip
 
-      - name: Salvar arquivos no repositório
+      - name: Salvar projeto no GitHub
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -A
+
           if git diff --cached --quiet; then
             echo "Nenhuma alteração para salvar."
           else
-            git commit -m "Importa base ViraPlay Android v0.3"
+            git commit -m "Importa projeto ViraPlay Android v0.3"
             git push
           fi
