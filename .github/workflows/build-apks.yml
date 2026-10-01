@@ -40,10 +40,10 @@ jobs:
             "platforms;android-36" \
             "build-tools;36.0.0"
 
-      - name: Configurar Gradle 9.6.0
+      - name: Configurar Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.6.0'
+          gradle-version: '8.13'
 
       - name: Compilar ViraPlay Cliente e ADM
         run: gradle :player:assembleDebug :admin:assembleDebug --stacktrace
