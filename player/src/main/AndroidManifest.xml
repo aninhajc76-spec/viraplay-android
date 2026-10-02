@@ -7,7 +7,8 @@
     <application
         android:allowBackup="false"
         android:banner="@drawable/viraplay_banner"
-        android:icon="@drawable/viraplay_logo"
+        android:icon="@drawable/viraplay_app_icon"
+        android:roundIcon="@drawable/viraplay_app_icon"
         android:label="ViraPlay"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">

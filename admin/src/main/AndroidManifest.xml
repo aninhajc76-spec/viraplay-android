@@ -2,7 +2,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="false"
-        android:icon="@drawable/viraplay_logo"
+        android:icon="@drawable/viraplay_admin_icon"
+        android:roundIcon="@drawable/viraplay_admin_icon"
         android:label="ViraPlay ADM"
         android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true">

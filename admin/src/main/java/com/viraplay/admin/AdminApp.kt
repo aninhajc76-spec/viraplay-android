@@ -40,6 +40,10 @@ private enum class Tab(val label: String) {
     DASHBOARD("Painel"), PENDING("Pendentes"), CLIENTS("Clientes")
 }
 
+private enum class ClientFilter(val label: String) {
+    ALL("Todos"), EXPIRING("Vencendo"), EXPIRED("Vencidos")
+}
+
 @Composable
 fun AdminApp() {
     val context = LocalContext.current
@@ -166,11 +170,13 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     val clients = devices.filter { !it.playlistUrl.isNullOrBlank() }
     val active = clients.count { it.enabled }
     val blocked = clients.size - active
-    val visibleClients = clients.filter {
+    val visibleClients = clients.filter { device ->
+        val meta = ClientMetaCodec.decode(device.label)
         search.isBlank() ||
-            it.label.orEmpty().contains(search, true) ||
-            it.pairingCode.contains(search, true) ||
-            playlistUsername(it.playlistUrl).orEmpty().contains(search, true)
+            meta.name.contains(search, true) ||
+            meta.identifier.orEmpty().contains(search, true) ||
+            device.pairingCode.contains(search, true) ||
+            playlistUsername(device.playlistUrl).orEmpty().contains(search, true)
     }
 
     Scaffold(
@@ -362,24 +368,64 @@ private fun ClientsTab(
     onSearch: (String) -> Unit,
     onOpen: (AdminDevice) -> Unit
 ) {
+    var filter by remember { mutableStateOf(ClientFilter.ALL) }
+
+    val filtered = items.filter { device ->
+        val days = ClientMetaCodec.daysUntil(ClientMetaCodec.decode(device.label).expiresIso)
+        when (filter) {
+            ClientFilter.ALL -> true
+            ClientFilter.EXPIRING -> days != null && days in 0..7
+            ClientFilter.EXPIRED -> days != null && days < 0
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
-        Text("Clientes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        Text(
+            "Clientes",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 25.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+        )
         OutlinedTextField(
             value = search,
             onValueChange = onSearch,
-            label = { Text("Buscar nome, código ou usuário") },
+            label = { Text("Buscar nome, identificador, código ou usuário") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
-        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (items.isEmpty()) item { EmptyCard("Nenhum cliente encontrado.") }
-            items(items, key = { it.deviceId }) { device -> ClientCard(device) { onOpen(device) } }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ClientFilter.entries.forEach { option ->
+                FilterChip(
+                    selected = filter == option,
+                    onClick = { filter = option },
+                    label = { Text(option.label) }
+                )
+            }
+        }
+
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (filtered.isEmpty()) item { EmptyCard("Nenhum cliente encontrado neste filtro.") }
+            items(filtered, key = { it.deviceId }) { device ->
+                ClientCard(device) { onOpen(device) }
+            }
         }
     }
 }
 
 @Composable
 private fun ClientCard(device: AdminDevice, onClick: () -> Unit) {
+    val meta = ClientMetaCodec.decode(device.label)
+    val days = ClientMetaCodec.daysUntil(meta.expiresIso)
+    val expiryText = ClientMetaCodec.isoToDisplay(meta.expiresIso)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Panel),
         shape = RoundedCornerShape(18.dp),
@@ -388,7 +434,7 @@ private fun ClientCard(device: AdminDevice, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    device.label?.takeIf { it.isNotBlank() } ?: "Sem nome",
+                    meta.name.ifBlank { "Sem nome" },
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -396,8 +442,27 @@ private fun ClientCard(device: AdminDevice, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text("Código ${device.pairingCode} • ${device.platform ?: "Android"}", color = Muted, fontSize = 11.sp)
+                meta.identifier?.let {
+                    Text("Identificador: $it", color = Cyan, fontSize = 11.sp)
+                }
+                expiryText?.let {
+                    val color = when {
+                        days == null -> Muted
+                        days < 0 -> Danger
+                        days <= 7 -> Purple
+                        else -> Green
+                    }
+                    val suffix = when {
+                        days == null -> ""
+                        days < 0 -> " • vencido"
+                        days == 0 -> " • vence hoje"
+                        days <= 7 -> " • vence em $days dia(s)"
+                        else -> ""
+                    }
+                    Text("Vencimento: $it$suffix", color = color, fontSize = 11.sp)
+                }
                 playlistUsername(device.playlistUrl)?.let {
-                    Text("Usuário: $it", color = Cyan, fontSize = 11.sp)
+                    Text("Usuário da lista: $it", color = Muted, fontSize = 10.sp)
                 }
             }
             StatusPill(device.enabled)
@@ -431,16 +496,43 @@ private fun ActivateDialog(
 ) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
+    var expiryInput by remember { mutableStateOf("") }
     var playlist by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var detecting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    fun detectExpiry() {
+        if (playlist.isBlank()) return
+        detecting = true
+        error = null
+        scope.launch {
+            try {
+                val iso = withContext(Dispatchers.IO) { repo.detectExpiryIso(playlist.trim()) }
+                if (iso != null) {
+                    expiryInput = ClientMetaCodec.isoToDisplay(iso).orEmpty()
+                } else {
+                    error = "O servidor não informou uma data de vencimento. Você pode preencher manualmente."
+                }
+            } catch (e: Throwable) {
+                error = "Não foi possível consultar o vencimento agora."
+            } finally {
+                detecting = false
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Ativar ${device.pairingCode}") },
         text = {
             Column {
-                Text("O código já veio do aparelho. Informe apenas o cliente e a lista.", color = Muted, fontSize = 12.sp)
+                Text(
+                    "O código já veio do aparelho. Complete apenas os dados do cliente.",
+                    color = Muted,
+                    fontSize = 12.sp
+                )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -449,14 +541,41 @@ private fun ActivateDialog(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 )
                 OutlinedTextField(
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("Identificador interno (opcional)") },
+                    supportingText = { Text("Ex.: Rany, Sala, Cliente 004") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                )
+                OutlinedTextField(
                     value = playlist,
                     onValueChange = { playlist = it.trim() },
                     label = { Text("URL M3U") },
                     minLines = 3,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                 )
-                playlistUsername(playlist)?.let { Text("Usuário detectado: $it", color = Cyan, fontSize = 11.sp) }
-                error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                playlistUsername(playlist)?.let {
+                    Text("Usuário detectado: $it", color = Cyan, fontSize = 11.sp)
+                }
+
+                OutlinedTextField(
+                    value = expiryInput,
+                    onValueChange = { expiryInput = it },
+                    label = { Text("Vencimento (DD/MM/AAAA)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                )
+                TextButton(
+                    onClick = { detectExpiry() },
+                    enabled = playlist.isNotBlank() && !detecting
+                ) {
+                    Text(if (detecting) "Consultando..." else "Detectar vencimento da lista")
+                }
+
+                error?.let {
+                    Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                }
             }
         },
         confirmButton = {
@@ -466,20 +585,37 @@ private fun ActivateDialog(
                         error = "Preencha nome e lista."
                         return@Button
                     }
+                    val expiryIso = ClientMetaCodec.inputToIso(expiryInput)
+                    if (expiryInput.isNotBlank() && expiryIso == null) {
+                        error = "Data inválida. Use DD/MM/AAAA."
+                        return@Button
+                    }
+
                     busy = true
                     scope.launch {
                         try {
-                            withContext(Dispatchers.IO) { repo.claim(token, device.pairingCode, name.trim(), playlist.trim()) }
+                            withContext(Dispatchers.IO) {
+                                repo.claim(
+                                    token = token,
+                                    code = device.pairingCode,
+                                    name = name.trim(),
+                                    identifier = identifier.trim().takeIf { it.isNotBlank() },
+                                    expiresIso = expiryIso,
+                                    playlist = playlist.trim()
+                                )
+                            }
                             onSaved()
                         } catch (e: Throwable) {
-                            error = (e.message ?: "Falha ao ativar").take(100)
+                            error = (e.message ?: "Falha ao ativar").take(120)
                         } finally {
                             busy = false
                         }
                     }
                 },
                 enabled = !busy
-            ) { Text(if (busy) "Ativando..." else "Ativar") }
+            ) {
+                Text(if (busy) "Ativando..." else "Ativar")
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
@@ -494,11 +630,24 @@ private fun EditDialog(
     onChanged: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf(device.label.orEmpty()) }
+    val initialMeta = remember(device.deviceId, device.label) { ClientMetaCodec.decode(device.label) }
+
+    var name by remember { mutableStateOf(initialMeta.name) }
+    var identifier by remember { mutableStateOf(initialMeta.identifier.orEmpty()) }
+    var expiryInput by remember { mutableStateOf(ClientMetaCodec.isoToDisplay(initialMeta.expiresIso).orEmpty()) }
     var playlist by remember { mutableStateOf(device.playlistUrl.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
+    var detecting by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    fun expiryIsoOrError(): String? {
+        val parsed = ClientMetaCodec.inputToIso(expiryInput)
+        if (expiryInput.isNotBlank() && parsed == null) {
+            error = "Data inválida. Use DD/MM/AAAA."
+        }
+        return parsed
+    }
 
     fun runAction(block: suspend () -> Unit) {
         busy = true
@@ -508,9 +657,29 @@ private fun EditDialog(
                 block()
                 onChanged()
             } catch (e: Throwable) {
-                error = (e.message ?: "Falha na operação").take(100)
+                error = (e.message ?: "Falha na operação").take(120)
             } finally {
                 busy = false
+            }
+        }
+    }
+
+    fun detectExpiry() {
+        if (playlist.isBlank()) return
+        detecting = true
+        error = null
+        scope.launch {
+            try {
+                val iso = withContext(Dispatchers.IO) { repo.detectExpiryIso(playlist.trim()) }
+                if (iso != null) {
+                    expiryInput = ClientMetaCodec.isoToDisplay(iso).orEmpty()
+                } else {
+                    error = "O servidor não informou a data de vencimento."
+                }
+            } catch (e: Throwable) {
+                error = "Não foi possível consultar o vencimento agora."
+            } finally {
+                detecting = false
             }
         }
     }
@@ -522,7 +691,7 @@ private fun EditDialog(
             Column {
                 Text("Código ${device.pairingCode}", color = Cyan, fontWeight = FontWeight.Bold)
                 Text(device.platform ?: "Android", color = Muted, fontSize = 11.sp)
-                playlistUsername(playlist)?.let { Text("Usuário: $it", color = Muted, fontSize = 11.sp) }
+                playlistUsername(playlist)?.let { Text("Usuário da lista: $it", color = Muted, fontSize = 11.sp) }
 
                 OutlinedTextField(
                     value = name,
@@ -532,34 +701,74 @@ private fun EditDialog(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 )
                 OutlinedTextField(
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("Identificador interno") },
+                    supportingText = { Text("Só aparece no seu ADM") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                )
+                OutlinedTextField(
                     value = playlist,
                     onValueChange = { playlist = it.trim() },
                     label = { Text("URL M3U") },
                     minLines = 3,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                 )
+                OutlinedTextField(
+                    value = expiryInput,
+                    onValueChange = { expiryInput = it },
+                    label = { Text("Vencimento (DD/MM/AAAA)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                )
+                TextButton(
+                    onClick = { detectExpiry() },
+                    enabled = playlist.isNotBlank() && !detecting
+                ) {
+                    Text(if (detecting) "Consultando..." else "Atualizar vencimento pela lista")
+                }
 
-                error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                error?.let {
+                    Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                }
 
-                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedButton(
                         onClick = {
+                            val expiryIso = expiryIsoOrError()
+                            if (expiryInput.isNotBlank() && expiryIso == null) return@OutlinedButton
                             runAction {
                                 withContext(Dispatchers.IO) {
-                                    repo.update(token, device.deviceId, !device.enabled, playlist, name)
+                                    repo.update(
+                                        token = token,
+                                        deviceId = device.deviceId,
+                                        enabled = !device.enabled,
+                                        playlist = playlist,
+                                        name = name,
+                                        identifier = identifier.trim().takeIf { it.isNotBlank() },
+                                        expiresIso = expiryIso
+                                    )
                                 }
                             }
                         },
                         enabled = !busy,
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (device.enabled) "Bloquear" else "Liberar") }
+                    ) {
+                        Text(if (device.enabled) "Bloquear" else "Liberar")
+                    }
 
                     OutlinedButton(
                         onClick = { confirmDelete = true },
                         enabled = !busy,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Excluir") }
+                    ) {
+                        Text("Excluir")
+                    }
                 }
 
                 if (confirmDelete) {
@@ -575,7 +784,9 @@ private fun EditDialog(
                                     runAction {
                                         withContext(Dispatchers.IO) { repo.delete(token, device.deviceId) }
                                     }
-                                }) { Text("Confirmar exclusão", color = Danger) }
+                                }) {
+                                    Text("Confirmar exclusão", color = Danger)
+                                }
                             }
                         }
                     }
@@ -585,14 +796,26 @@ private fun EditDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    val expiryIso = expiryIsoOrError()
+                    if (expiryInput.isNotBlank() && expiryIso == null) return@Button
                     runAction {
                         withContext(Dispatchers.IO) {
-                            repo.update(token, device.deviceId, device.enabled, playlist, name)
+                            repo.update(
+                                token = token,
+                                deviceId = device.deviceId,
+                                enabled = device.enabled,
+                                playlist = playlist,
+                                name = name,
+                                identifier = identifier.trim().takeIf { it.isNotBlank() },
+                                expiresIso = expiryIso
+                            )
                         }
                     }
                 },
                 enabled = !busy
-            ) { Text(if (busy) "Salvando..." else "Salvar") }
+            ) {
+                Text(if (busy) "Salvando..." else "Salvar")
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
     )

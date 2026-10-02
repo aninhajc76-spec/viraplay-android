@@ -1,6 +1,7 @@
 package com.viraplay.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -9,11 +10,21 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,23 +53,41 @@ fun MobileShell(
     Scaffold(
         containerColor = VpBg,
         topBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(VpBg, VpPanel.copy(alpha = 0.92f), VpBg)
+                        )
+                    )
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
-                BrandWordmark()
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(status, color = VpMuted, fontSize = 9.sp, maxLines = 1)
-                    Row {
-                        TextButton(onClick = onRefresh) { Text("Atualizar", fontSize = 11.sp) }
-                        TextButton(onClick = onSettings) { Text("Ajustes", fontSize = 11.sp) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BrandWordmark()
+                    Spacer(Modifier.weight(1f))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(status, color = VpMuted, fontSize = 9.sp, maxLines = 1)
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            IconButton(onClick = onRefresh) {
+                                Icon(Icons.Filled.Refresh, contentDescription = "Atualizar", tint = VpCyan)
+                            }
+                            IconButton(onClick = onSettings) {
+                                Icon(Icons.Filled.Settings, contentDescription = "Ajustes", tint = Color.White)
+                            }
+                        }
                     }
                 }
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = VpPanel) {
+            NavigationBar(
+                containerColor = VpPanel,
+                tonalElevation = 10.dp
+            ) {
                 listOf(
                     MainSection.HOME to "Início",
                     MainSection.LIVE to "TV",
@@ -69,8 +98,20 @@ fun MobileShell(
                     NavigationBarItem(
                         selected = section == item,
                         onClick = { onSection(item) },
-                        icon = { Text(shortLabel(item), fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                        label = { Text(label, fontSize = 10.sp) }
+                        icon = {
+                            Icon(
+                                imageVector = navIcon(item),
+                                contentDescription = label
+                            )
+                        },
+                        label = { Text(label, fontSize = 10.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color.White,
+                            selectedTextColor = VpCyan,
+                            indicatorColor = VpPurple.copy(alpha = 0.28f),
+                            unselectedIconColor = VpMuted,
+                            unselectedTextColor = VpMuted
+                        )
                     )
                 }
             }
@@ -88,12 +129,12 @@ fun MobileShell(
     }
 }
 
-private fun shortLabel(section: MainSection): String = when (section) {
-    MainSection.HOME -> "VP"
-    MainSection.LIVE -> "TV"
-    MainSection.MOVIES -> "FIL"
-    MainSection.SERIES -> "SER"
-    MainSection.FAVORITES -> "FAV"
+private fun navIcon(section: MainSection): ImageVector = when (section) {
+    MainSection.HOME -> Icons.Filled.Home
+    MainSection.LIVE -> Icons.Filled.LiveTv
+    MainSection.MOVIES -> Icons.Filled.Movie
+    MainSection.SERIES -> Icons.Filled.VideoLibrary
+    MainSection.FAVORITES -> Icons.Filled.Favorite
 }
 
 @Composable
@@ -126,9 +167,9 @@ private fun MobileHome(
             Text("O que você quer assistir?", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeQuick("TV ao vivo", Modifier.weight(1f)) { onSection(MainSection.LIVE) }
-                HomeQuick("Filmes", Modifier.weight(1f)) { onSection(MainSection.MOVIES) }
-                HomeQuick("Séries", Modifier.weight(1f)) { onSection(MainSection.SERIES) }
+                HomeQuick("TV ao vivo", Icons.Filled.LiveTv, Modifier.weight(1f)) { onSection(MainSection.LIVE) }
+                HomeQuick("Filmes", Icons.Filled.Movie, Modifier.weight(1f)) { onSection(MainSection.MOVIES) }
+                HomeQuick("Séries", Icons.Filled.VideoLibrary, Modifier.weight(1f)) { onSection(MainSection.SERIES) }
             }
         }
 
@@ -183,14 +224,40 @@ private fun MobileHome(
 }
 
 @Composable
-private fun HomeQuick(label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun HomeQuick(
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = VpPanel),
-        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(18.dp),
         modifier = modifier
     ) {
-        TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().height(76.dp)) {
-            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(92.dp)
+                .background(
+                    Brush.linearGradient(
+                        listOf(VpPanelAlt, VpPanel, VpPurple.copy(alpha = 0.14f))
+                    )
+                )
+        ) {
+            TextButton(
+                onClick = onClick,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = VpCyan, modifier = Modifier.size(27.dp))
+                    Spacer(Modifier.height(6.dp))
+                    Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                }
+            }
         }
     }
 }

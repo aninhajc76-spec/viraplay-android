@@ -3,6 +3,7 @@ package com.viraplay.admin
 import com.viraplay.shared.AdminDevice
 import com.viraplay.shared.AppConfig
 import com.viraplay.shared.Http
+import com.viraplay.shared.XtreamAccountClient
 import org.json.JSONObject
 
 class AdminRepository {
@@ -21,10 +22,25 @@ class AdminRepository {
             )
         ).filter { it.label != DELETED_MARKER }
 
-    fun claim(token: String, code: String, label: String, playlist: String) {
+    fun detectExpiryIso(playlist: String): String? =
+        runCatching {
+            ClientMetaCodec.epochSecondsToIso(
+                XtreamAccountClient.fetchFromPlaylist(playlist)?.expiresAtEpochSeconds
+            )
+        }.getOrNull()
+
+    fun claim(
+        token: String,
+        code: String,
+        name: String,
+        identifier: String?,
+        expiresIso: String?,
+        playlist: String
+    ) {
+        val expiry = expiresIso ?: detectExpiryIso(playlist)
         val body = JSONObject()
             .put("pairing_code", code)
-            .put("label", label)
+            .put("label", ClientMetaCodec.encode(name, identifier, expiry))
             .put("playlist_url", playlist)
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/claim", body, auth(token))
     }
@@ -34,13 +50,16 @@ class AdminRepository {
         deviceId: String,
         enabled: Boolean,
         playlist: String,
-        label: String
+        name: String,
+        identifier: String?,
+        expiresIso: String?
     ) {
+        val expiry = expiresIso ?: detectExpiryIso(playlist)
         val body = JSONObject()
             .put("device_id", deviceId)
             .put("enabled", enabled)
             .put("playlist_url", playlist.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
-            .put("label", label)
+            .put("label", ClientMetaCodec.encode(name, identifier, expiry))
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/update", body, auth(token))
     }
 

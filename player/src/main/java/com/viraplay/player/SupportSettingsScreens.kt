@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -23,52 +24,57 @@ fun ActivationScreen(
     onRefresh: () -> Unit,
     onSupport: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(VpBg)
+            .background(
+                Brush.verticalGradient(
+                    listOf(VpBg, VpPanel.copy(alpha = 0.78f), VpBg)
+                )
+            )
             .padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
-        BrandWordmark(large = true)
-        Spacer(Modifier.height(24.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = VpPanel),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BrandWordmark(large = true)
+            Spacer(Modifier.height(24.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = VpPanel),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
             ) {
-                Text("Ative seu dispositivo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-                Spacer(Modifier.height(6.dp))
-                Text("Envie este código ao suporte ViraPlay.", color = VpMuted, fontSize = 14.sp)
-                Spacer(Modifier.height(20.dp))
-                Surface(color = VpPanelAlt, shape = RoundedCornerShape(18.dp)) {
-                    Text(
-                        code,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 38.sp,
-                        letterSpacing = 4.sp,
-                        modifier = Modifier.padding(horizontal = 30.dp, vertical = 18.dp)
-                    )
-                }
-                Spacer(Modifier.height(18.dp))
-                if (loading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = VpCyan)
-                    Spacer(Modifier.height(12.dp))
-                }
-                Text(status, color = if (status.startsWith("Falha")) VpDanger else VpMuted, fontSize = 13.sp)
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onRefresh, enabled = !loading, modifier = Modifier.weight(1f)) {
-                        Text(if (loading) "Carregando..." else "Atualizar")
+                Column(
+                    modifier = Modifier.padding(26.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Ative seu dispositivo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Envie este código ao suporte ViraPlay.", color = VpMuted, fontSize = 14.sp)
+                    Spacer(Modifier.height(20.dp))
+                    Surface(color = VpPanelAlt, shape = RoundedCornerShape(18.dp)) {
+                        Text(
+                            code,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 38.sp,
+                            letterSpacing = 4.sp,
+                            modifier = Modifier.padding(horizontal = 30.dp, vertical = 18.dp)
+                        )
                     }
-                    OutlinedButton(onClick = onSupport, modifier = Modifier.weight(1f)) {
-                        Text("Suporte")
+                    Spacer(Modifier.height(18.dp))
+                    if (loading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = VpCyan)
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    Text(status, color = if (status.startsWith("Falha")) VpDanger else VpMuted, fontSize = 13.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = onRefresh, enabled = !loading, modifier = Modifier.weight(1f)) {
+                            Text(if (loading) "Carregando..." else "Atualizar")
+                        }
+                        OutlinedButton(onClick = onSupport, modifier = Modifier.weight(1f)) {
+                            Text("Suporte")
+                        }
                     }
                 }
             }
@@ -140,10 +146,14 @@ fun SupportScreen(
                         Button(
                             onClick = { Support.openWhatsApp(context, code) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Abrir WhatsApp") }
+                        ) {
+                            Text("Abrir WhatsApp")
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                        Text("Voltar")
+                    }
                 }
             }
         }
@@ -153,8 +163,8 @@ fun SupportScreen(
 @Composable
 fun SettingsScreen(
     code: String,
-    db: CatalogDb,
     status: String,
+    accessText: String?,
     isTv: Boolean,
     onBack: () -> Unit,
     onSupport: () -> Unit,
@@ -171,15 +181,21 @@ fun SettingsScreen(
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(onClick = onBack) { Text("Voltar") }
             }
+
             Text("Configurações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 28.sp)
+            Text("Informações do seu ViraPlay", color = VpMuted, fontSize = 12.sp)
 
             SettingsCard("Status", status)
             SettingsCard("Código do aparelho", code)
-            SettingsCard("Fonte", "${db.getMeta("source_kind") ?: "--"} • ${db.getMeta("source_name") ?: "--"}")
-            SettingsCard("Versão", "ViraPlay 3.0.0")
+            accessText?.let { SettingsCard("Vencimento", it) }
+            SettingsCard("Versão", "ViraPlay 3.1.0 Beta")
 
-            Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("Atualizar catálogo") }
-            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte ViraPlay") }
+            Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
+                Text("Atualizar catálogo")
+            }
+            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) {
+                Text("Suporte ViraPlay")
+            }
         }
     }
 }
@@ -188,12 +204,13 @@ fun SettingsScreen(
 private fun SettingsCard(title: String, value: String) {
     Card(
         colors = CardDefaults.cardColors(containerColor = VpPanel),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(18.dp)) {
             Text(title, color = VpMuted, fontSize = 11.sp)
-            Text(value, color = Color.White, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Text(value, color = Color.White, fontWeight = FontWeight.SemiBold)
         }
     }
 }

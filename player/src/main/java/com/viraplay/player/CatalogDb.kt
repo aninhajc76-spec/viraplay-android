@@ -264,6 +264,46 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(
         ).use(::readItems)
     }
 
+
+    fun liveNeighbor(item: CatalogItem, next: Boolean): CatalogItem? {
+        val generation = activeGeneration() ?: return null
+        if (item.type != ContentType.LIVE) return null
+
+        val currentSort = readableDatabase.rawQuery(
+            "SELECT sort_index FROM items WHERE generation=? AND item_key=? LIMIT 1",
+            arrayOf(generation, item.itemKey)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else return null
+        }
+
+        val direction = if (next) ">" else "<"
+        val order = if (next) "ASC" else "DESC"
+        val args = arrayOf(
+            generation,
+            item.categoryName,
+            item.itemKey,
+            currentSort.toString()
+        )
+
+        fun queryNeighbor(whereDirection: Boolean): CatalogItem? {
+            val sql = if (whereDirection) {
+                baseSelect() +
+                    " WHERE i.generation=? AND i.content_type='LIVE'" +
+                    " AND i.category_name=? AND i.item_key<>? AND i.sort_index $direction ?" +
+                    " ORDER BY i.sort_index $order, i.name COLLATE NOCASE $order LIMIT 1"
+            } else {
+                baseSelect() +
+                    " WHERE i.generation=? AND i.content_type='LIVE'" +
+                    " AND i.category_name=? AND i.item_key<>?" +
+                    " ORDER BY i.sort_index $order, i.name COLLATE NOCASE $order LIMIT 1"
+            }
+            val useArgs = if (whereDirection) args else args.copyOfRange(0, 3)
+            return readableDatabase.rawQuery(sql, useArgs).use(::readItems).firstOrNull()
+        }
+
+        return queryNeighbor(true) ?: queryNeighbor(false)
+    }
+
     fun favorites(
         search: String = "",
         limit: Int = 500

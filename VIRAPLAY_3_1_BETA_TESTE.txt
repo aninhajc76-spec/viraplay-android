@@ -1,0 +1,42 @@
+VIRAPLAY 3.1 BETA — PACOTE CONSOLIDADO PARA TESTE REAL
+
+OBJETIVO
+Esta versão foi preparada para teste prático em celular e Android TV/TV Box,
+sem alterar a base funcional da ViraPlay 3.0 que já reproduz canais rapidamente.
+
+PRINCIPAIS MUDANÇAS DO CLIENTE
+- Novo ícone do ViraPlay com fundo premium azul/roxo.
+- Identidade ViraPlay com selo BETA discreto junto à marca.
+- Navegação mobile com ícones profissionais e acabamento visual refinado.
+- Removida da interface qualquer exibição de domínio/fonte/servidor.
+- Configurações mostram somente status, código, vencimento quando disponível,
+  versão, atualização do catálogo e suporte.
+- Vencimento consultado diretamente da conta Xtream quando o servidor fornece exp_date.
+- Player mantém os controles de ação acessíveis.
+- Botão Girar permanece disponível no celular.
+- Modos de tela: Ajustar, Zoom e Preencher.
+- TV ao vivo: Canal anterior e Próximo canal sem voltar à lista.
+- Mantidos Favoritos, Continuar assistindo e progresso de filmes/episódios.
+- Mantido cache local para abertura rápida do catálogo.
+- Suporte ViraPlay via WhatsApp: +55 84 9927-6322.
+
+PRINCIPAIS MUDANÇAS DO ADM
+- Mantida a estrutura Painel / Pendentes / Clientes aprovada na versão 3.0.
+- Novo ícone exclusivo ViraPlay ADM.
+- Campo Identificador interno por cliente.
+- Campo Vencimento por cliente.
+- O vencimento pode ser digitado ou detectado automaticamente pela lista Xtream.
+- Filtros: Todos, Vencendo e Vencidos.
+- Busca também encontra o identificador interno.
+- Cartão do cliente mostra nome, identificador, vencimento, status e usuário da lista.
+- Editar, bloquear/liberar e excluir continuam disponíveis.
+
+OBSERVAÇÃO SOBRE VENCIMENTO
+O ADM salva o identificador e a data de vencimento junto aos metadados internos do cliente,
+sem alterar a URL da lista. No aplicativo do cliente, a data exibida vem da própria conta
+Xtream quando o servidor informa exp_date. Nenhum login, senha, domínio ou host é exibido
+ao cliente.
+
+VERSÃO
+Cliente: 3.1.0 Beta — versionCode 31
+ADM: 3.1.0 — versionCode 31

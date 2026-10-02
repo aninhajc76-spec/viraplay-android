@@ -45,3 +45,6 @@ O vídeo não passa pelo Worker/Supabase da ViraPlay. O backend é usado apenas 
 
 ## Roku
 A API e o fluxo de ativação foram mantidos independentes da interface Android para permitir um cliente Roku futuro sem refazer o painel e o cadastro.
+
+
+> Substituída pela ViraPlay 3.1 Beta. Consulte docs/VIRAPLAY_3_1_BETA.md.

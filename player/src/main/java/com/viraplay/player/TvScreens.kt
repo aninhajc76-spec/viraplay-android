@@ -200,11 +200,11 @@ private fun TvHome(
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Text("ViraPlay 3.0", color = VpCyan, fontWeight = FontWeight.Bold)
+                Text("ViraPlay 3.1 Beta", color = VpCyan, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(20.dp))
                 Text(status, color = VpMuted)
                 Spacer(Modifier.weight(1f))
-                Text("Player para fontes configuradas pelo usuário", color = VpMuted, fontSize = 11.sp)
+                Text("Experiência ViraPlay • versão de testes", color = VpMuted, fontSize = 11.sp)
             }
         }
     }

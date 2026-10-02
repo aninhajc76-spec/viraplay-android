@@ -40,3 +40,6 @@ TESTE RECOMENDADO ANTES DE PASSAR AOS 4 CLIENTES
 13. Testar em Android TV/TV Box com controle remoto.
 
 A Roku será uma segunda interface no futuro, usando a mesma API e o mesmo fluxo de ativação.
+
+
+ATUALIZAÇÃO: substituída pela ViraPlay 3.1 Beta.

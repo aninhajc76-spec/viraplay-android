@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,16 +27,52 @@ import coil.compose.AsyncImage
 @Composable
 fun BrandWordmark(
     modifier: Modifier = Modifier,
-    large: Boolean = false
+    large: Boolean = false,
+    showBeta: Boolean = true
 ) {
-    androidx.compose.foundation.Image(
-        painter = painterResource(R.drawable.viraplay_wordmark),
-        contentDescription = "ViraPlay",
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-            .width(if (large) 300.dp else 178.dp)
-            .height(if (large) 92.dp else 54.dp)
-    )
+    val wide = LocalConfiguration.current.screenWidthDp >= 700
+    val logoWidth = when {
+        large && wide -> 300.dp
+        large -> 220.dp
+        else -> 165.dp
+    }
+    val logoHeight = when {
+        large && wide -> 92.dp
+        large -> 72.dp
+        else -> 50.dp
+    }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.viraplay_wordmark),
+            contentDescription = "ViraPlay",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .width(logoWidth)
+                .height(logoHeight)
+        )
+
+        if (showBeta) {
+            Surface(
+                color = VpPurple.copy(alpha = 0.16f),
+                border = BorderStroke(1.dp, VpPurple.copy(alpha = 0.72f)),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.padding(start = if (large) 10.dp else 4.dp)
+            ) {
+                Text(
+                    "BETA",
+                    color = Color.White,
+                    fontSize = if (large) 10.sp else 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable

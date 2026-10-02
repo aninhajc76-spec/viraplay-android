@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.viraplay.shared.ContentType
+import com.viraplay.shared.XtreamAccountInfo
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -39,6 +43,7 @@ fun ViraPlayApp() {
         uiMode.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
             context.packageManager.hasSystemFeature("android.software.leanback") ||
             context.packageManager.hasSystemFeature("android.hardware.type.television")
+
     val identity = remember { DeviceIdentity(context) }
     val db = remember { CatalogDb(context) }
     val repository = remember { ContentRepository(context, db) }
@@ -46,22 +51,24 @@ fun ViraPlayApp() {
     val scope = rememberCoroutineScope()
 
     var section by remember {
-        mutableStateOf(runCatching { MainSection.valueOf(uiStore.section()) }.getOrDefault(MainSection.HOME))
+        mutableStateOf(
+            runCatching { MainSection.valueOf(uiStore.section()) }
+                .getOrDefault(MainSection.HOME)
+        )
     }
     var enabled by remember { mutableStateOf(uiStore.lastEnabled()) }
     var status by remember {
-        mutableStateOf(if (db.hasCatalog()) "${db.countAll()} títulos prontos" else "Conectando...")
+        mutableStateOf(if (db.hasCatalog()) "${db.countAll()} títulos disponíveis" else "Conectando...")
     }
+    var accountInfo by remember { mutableStateOf<XtreamAccountInfo?>(null) }
     var syncing by remember { mutableStateOf(!db.hasCatalog()) }
     var catalogVersion by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     var resumeItem by remember { mutableStateOf<CatalogItem?>(null) }
-    var lastError by remember { mutableStateOf<String?>(null) }
 
     suspend fun refresh(forceCatalog: Boolean) {
         val hadCatalog = db.hasCatalog()
         if (!hadCatalog) syncing = true
-        lastError = null
 
         try {
             val cfg = withContext(Dispatchers.IO) {
@@ -86,29 +93,36 @@ fun ViraPlayApp() {
                 return
             }
 
+            accountInfo = withContext(Dispatchers.IO) {
+                repository.accountInfo(remoteUrl)
+            }
+
             val cachedUrl = db.getMeta("playlist_url")
             val lastSync = db.getMetaLong("last_sync")
             val stale = System.currentTimeMillis() - lastSync > 6L * 60L * 60L * 1000L
             val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
 
             if (needsSync) {
-                status = if (hadCatalog) "Atualizando catálogo em segundo plano..." else "Preparando catálogo pela primeira vez..."
-                val result = withContext(Dispatchers.IO) {
+                status = if (hadCatalog) {
+                    "Atualizando catálogo em segundo plano..."
+                } else {
+                    "Preparando catálogo pela primeira vez..."
+                }
+
+                withContext(Dispatchers.IO) {
                     repository.syncCatalog(remoteUrl) { progress ->
                         scope.launch { status = progress }
                     }
                 }
                 catalogVersion += 1
-                status = "${db.countAll()} títulos • ${result.sourceKind}"
-            } else {
-                status = "${db.countAll()} títulos disponíveis"
             }
+
+            status = buildHeaderStatus(db.countAll(), accountInfo)
         } catch (e: Throwable) {
-            val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
-            lastError = message
             if (db.hasCatalog()) {
                 status = "Modo offline • catálogo salvo"
             } else {
+                val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
                 status = "Falha: $message"
             }
         } finally {
@@ -128,7 +142,9 @@ fun ViraPlayApp() {
         }
 
         val (position, duration) = db.progress(item.itemKey)
-        val resumable = position > 30_000L && (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
+        val resumable = position > 30_000L &&
+            (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
+
         if (resumable) {
             resumeItem = item.copy(progressMs = position, durationMs = duration)
         } else {
@@ -229,8 +245,8 @@ fun ViraPlayApp() {
 
                 Overlay.Settings -> SettingsScreen(
                     code = identity.pairingCode,
-                    db = db,
                     status = status,
+                    accessText = accountDisplay(accountInfo),
                     isTv = isTv,
                     onBack = { overlay = null },
                     onSupport = { overlay = Overlay.Support },
@@ -245,25 +261,70 @@ fun ViraPlayApp() {
                     onDismissRequest = { resumeItem = null },
                     title = { Text("Continuar assistindo?") },
                     text = {
-                        Text(
-                            "Você parou em ${formatProgress(item.progressMs)}. Deseja continuar dali?"
-                        )
+                        Text("Você parou em ${formatProgress(item.progressMs)}. Deseja continuar dali?")
                     },
                     confirmButton = {
                         Button(onClick = {
                             resumeItem = null
                             overlay = Overlay.Player(item, item.progressMs)
-                        }) { Text("Continuar") }
+                        }) {
+                            Text("Continuar")
+                        }
                     },
                     dismissButton = {
                         TextButton(onClick = {
                             resumeItem = null
                             db.clearProgress(item.itemKey)
                             overlay = Overlay.Player(item, 0L)
-                        }) { Text("Do início") }
+                        }) {
+                            Text("Do início")
+                        }
                     }
                 )
             }
         }
     }
+}
+
+private fun buildHeaderStatus(count: Int, account: XtreamAccountInfo?): String {
+    val expiry = account?.expiresAtEpochSeconds ?: return "$count títulos"
+    val days = daysUntil(expiry)
+    return when {
+        days < 0 -> "$count títulos • acesso vencido"
+        days == 0 -> "$count títulos • vence hoje"
+        days <= 7 -> "$count títulos • vence em $days dia(s)"
+        else -> "$count títulos"
+    }
+}
+
+private fun accountDisplay(account: XtreamAccountInfo?): String? {
+    val expiry = account?.expiresAtEpochSeconds ?: return null
+    val date = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
+        .format(Date(expiry * 1000L))
+    val days = daysUntil(expiry)
+    return when {
+        days < 0 -> "Vencido em $date"
+        days == 0 -> "Vence hoje • $date"
+        days <= 7 -> "Ativo até $date • faltam $days dia(s)"
+        else -> "Ativo até $date"
+    }
+}
+
+private fun daysUntil(epochSeconds: Long): Int {
+    val now = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    val target = Calendar.getInstance().apply {
+        timeInMillis = epochSeconds * 1000L
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    return ((target - now) / 86_400_000L).toInt()
 }

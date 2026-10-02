@@ -4,6 +4,8 @@ import android.content.Context
 import com.viraplay.shared.AppConfig
 import com.viraplay.shared.DeviceConfig
 import com.viraplay.shared.Http
+import com.viraplay.shared.XtreamAccountClient
+import com.viraplay.shared.XtreamAccountInfo
 import java.net.URLEncoder
 import org.json.JSONObject
 
@@ -40,6 +42,10 @@ class ContentRepository(
             )
         )
     }
+
+
+    fun accountInfo(playlistUrl: String): XtreamAccountInfo? =
+        runCatching { XtreamAccountClient.fetchFromPlaylist(playlistUrl) }.getOrNull()
 
     fun syncCatalog(
         playlistUrl: String,
