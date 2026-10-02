@@ -14,23 +14,33 @@ jobs:
       - name: Baixar repositório
         uses: actions/checkout@v4
 
-      - name: Extrair projeto ViraPlay
+      - name: Localizar e extrair atualização
         shell: bash
         run: |
           set -e
 
+          ZIP_FILE="$(ls -1t ViraPlay_FINAL_*.zip viraplay-repo-source-v0.3*.zip 2>/dev/null | head -n 1 || true)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Nenhum pacote ViraPlay encontrado."
+            exit 1
+          fi
+
+          echo "Usando pacote: $ZIP_FILE"
+
           rm -rf .viraplay_tmp
           mkdir .viraplay_tmp
 
-          unzip -q viraplay-repo-source-v0.3.zip -d .viraplay_tmp
+          unzip -q "$ZIP_FILE" -d .viraplay_tmp
 
           rsync -a \
             --exclude='.git' \
-            --exclude='.github/workflows/build-apks.yml' \
+            --exclude='.github/workflows' \
             .viraplay_tmp/ ./
 
           rm -rf .viraplay_tmp
-          rm -f viraplay-repo-source-v0.3.zip
+          rm -f ViraPlay_FINAL_*.zip
+          rm -f viraplay-repo-source-v0.3*.zip
 
       - name: Salvar projeto no GitHub
         shell: bash
@@ -43,6 +53,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nenhuma alteração para salvar."
           else
-            git commit -m "Importa projeto ViraPlay Android v0.3"
+            git commit -m "Importa ViraPlay v1.1 final"
             git push
           fi
