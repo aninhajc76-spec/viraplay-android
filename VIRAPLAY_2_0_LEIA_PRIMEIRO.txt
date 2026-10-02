@@ -1,0 +1,49 @@
+VIRAPLAY 2.0 — PACOTE CONSOLIDADO
+
+Este ZIP é um pacote de sobreposição para o repositório viraplay-android atual.
+O importador já existente extrai o pacote e substitui somente os arquivos novos/alterados.
+
+PRINCIPAIS ALTERAÇÕES
+
+APP CLIENTE
+- Nova identidade ViraPlay.
+- Ícone exclusivo do aplicativo.
+- Início, Ao vivo, Filmes, Séries e Favoritos.
+- Catálogo local SQLite para não baixar e manter 270 mil itens na memória toda vez.
+- A primeira sincronização pode demorar; as próximas aberturas usam o catálogo salvo imediatamente.
+- Atualização da lista em segundo plano.
+- Busca e categorias.
+- Logos de canais e capas quando a M3U fornece tvg-logo.
+- Filmes em grade visual.
+- Séries agrupadas; reconhece nomes S01E09 e 1x09 para organizar temporadas/episódios.
+- Favoritos persistentes.
+- Continuar assistindo persistente.
+- Marca episódio como assistido quando chega a 90%.
+- Ao abrir episódio/filme novamente, retoma do ponto salvo.
+- Player em tela cheia; no celular abre em paisagem e tem botão Girar.
+- Ao voltar do player, a tela anterior continua viva, evitando voltar ao começo da navegação.
+
+APP ADM
+- Painel com Clientes, Ativos, Pendentes e Bloqueados.
+- Aparelhos sem lista aparecem em Pendentes automaticamente.
+- Para ativar: tocar no aparelho e preencher somente nome + URL M3U.
+- Não é necessário digitar o código novamente.
+- Busca de clientes.
+- Editar nome e lista.
+- Bloquear/liberar.
+- Excluir.
+- URL M3U aparece somente na edição do cliente.
+
+COMO SUBIR
+1. Envie o ZIP ViraPlay_FINAL_v1_1_FIX_V2_0.zip na raiz do repositório.
+2. Faça Commit changes.
+3. Abra Actions > Importar projeto ViraPlay.
+4. Run workflow.
+5. Espere o Importar projeto ViraPlay ficar verde.
+6. O Build ViraPlay APKs iniciará automaticamente pelo commit do importador.
+7. Se o build ficar verde, baixe o artefato ViraPlay-APKs-debug.
+
+IMPORTANTE
+- Não precisa copiar nenhum código pelo celular.
+- Não precisa executar Build manual antes do importador.
+- Este pacote não altera seu Worker, Supabase nem credenciais.

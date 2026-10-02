@@ -12,13 +12,11 @@ android {
         applicationId = "com.viraplay.admin"
         minSdk = 23
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.1.0"
+        versionCode = 20
+        versionName = "2.0.0"
     }
 
-    buildFeatures {
-        compose = true
-    }
+    buildFeatures { compose = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -43,6 +41,5 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui-tooling-preview")
-
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
