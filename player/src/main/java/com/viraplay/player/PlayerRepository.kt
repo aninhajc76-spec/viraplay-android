@@ -6,6 +6,7 @@ import com.viraplay.shared.Http
 import java.net.URLEncoder
 import org.json.JSONObject
 
+/** Compatibilidade com a base anterior. A ViraPlay 3.0 usa ContentRepository. */
 class PlayerRepository {
     fun register(deviceId: String, secret: String, code: String, platform: String) {
         val body = JSONObject()
@@ -20,12 +21,10 @@ class PlayerRepository {
         val id = URLEncoder.encode(deviceId, "UTF-8")
         val sec = URLEncoder.encode(secret, "UTF-8")
         return Http.parseDeviceConfig(
-            Http.getText("${AppConfig.SERVER_BASE_URL}/api/config?device_id=$id&secret=$sec")
+            Http.getText("${AppConfig.SERVER_BASE_URL}/api/config?device_id=$id&secret=$sec", maxChars = 250_000)
         )
     }
 
     fun syncCatalog(playlistUrl: String, db: CatalogDb): Int =
-        Http.withReader(playlistUrl) { reader ->
-            db.replaceFromM3u(reader, playlistUrl)
-        }
+        M3uSync().sync(playlistUrl, db).count
 }

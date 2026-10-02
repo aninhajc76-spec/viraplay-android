@@ -6,65 +6,60 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.viraplay.shared.ContentType
-import java.io.BufferedReader
-
-data class CatalogItem(
-    val id: Long,
-    val name: String,
-    val url: String,
-    val logo: String?,
-    val group: String,
-    val type: ContentType,
-    val seriesKey: String?,
-    val season: Int?,
-    val episode: Int?,
-    val favorite: Boolean,
-    val progressMs: Long,
-    val durationMs: Long
-) {
-    val progressFraction: Float
-        get() = if (durationMs > 0L) {
-            (progressMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-        } else 0f
-
-    val watched: Boolean
-        get() = durationMs > 0L && progressFraction >= 0.90f
-}
 
 class CatalogDb(context: Context) : SQLiteOpenHelper(
     context,
-    "viraplay_catalog_v2.db",
+    "viraplay_catalog_v3.db",
     null,
     1
 ) {
-    private val attrRegex = Regex("""([\\w-]+)=\"([^\"]*)\"""")
-    private val seasonEpisode = Regex("""(?i)^(.*?)(?:[\\s._-]+)S(\\d{1,2})E(\\d{1,3})(?:\\b|[\\s._-])""")
-    private val xEpisode = Regex("""(?i)^(.*?)(?:[\\s._-]+)(\\d{1,2})x(\\d{1,3})(?:\\b|[\\s._-])""")
-
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
-            CREATE TABLE catalog (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE items (
+                row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                generation TEXT NOT NULL,
+                item_key TEXT NOT NULL,
+                source_id TEXT,
                 name TEXT NOT NULL,
-                url TEXT NOT NULL UNIQUE,
-                logo TEXT,
-                group_name TEXT NOT NULL,
+                url TEXT,
+                image TEXT,
+                backdrop TEXT,
+                category_id TEXT,
+                category_name TEXT NOT NULL,
                 content_type TEXT NOT NULL,
+                series_id TEXT,
                 series_key TEXT,
                 season INTEGER,
                 episode INTEGER,
-                sort_index INTEGER NOT NULL
+                plot TEXT,
+                rating TEXT,
+                container_extension TEXT,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(generation, item_key)
             )
             """.trimIndent()
         )
-        db.execSQL("CREATE INDEX idx_catalog_type_group ON catalog(content_type, group_name)")
-        db.execSQL("CREATE INDEX idx_catalog_series ON catalog(series_key, season, episode)")
-        db.execSQL("CREATE TABLE favorites (url TEXT PRIMARY KEY)")
+        db.execSQL("CREATE INDEX idx_items_generation_type ON items(generation, content_type)")
+        db.execSQL("CREATE INDEX idx_items_generation_category ON items(generation, content_type, category_id)")
+        db.execSQL("CREATE INDEX idx_items_series ON items(generation, series_id, series_key, season, episode)")
+        db.execSQL(
+            """
+            CREATE TABLE categories (
+                generation TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                category_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(generation, content_type, category_id)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE TABLE favorites (item_key TEXT PRIMARY KEY)")
         db.execSQL(
             """
             CREATE TABLE progress (
-                url TEXT PRIMARY KEY,
+                item_key TEXT PRIMARY KEY,
                 position_ms INTEGER NOT NULL DEFAULT 0,
                 duration_ms INTEGER NOT NULL DEFAULT 0,
                 updated_at INTEGER NOT NULL DEFAULT 0
@@ -76,264 +71,379 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
 
-    fun hasCatalog(): Boolean = readableDatabase.rawQuery(
-        "SELECT 1 FROM catalog LIMIT 1",
-        null
-    ).use { it.moveToFirst() }
+    fun activeGeneration(): String? = getMeta("active_generation")
 
-    fun countAll(): Int = readableDatabase.rawQuery(
-        "SELECT COUNT(*) FROM catalog",
-        null
-    ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    fun hasCatalog(): Boolean {
+        val generation = activeGeneration() ?: return false
+        return readableDatabase.rawQuery(
+            "SELECT 1 FROM items WHERE generation=? AND content_type!='EPISODE' LIMIT 1",
+            arrayOf(generation)
+        ).use { it.moveToFirst() }
+    }
+
+    fun countAll(): Int {
+        val generation = activeGeneration() ?: return 0
+        return readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM items WHERE generation=? AND content_type!='EPISODE'",
+            arrayOf(generation)
+        ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }
+
+    fun count(type: ContentType): Int {
+        val generation = activeGeneration() ?: return 0
+        return readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM items WHERE generation=? AND content_type=?",
+            arrayOf(generation, type.name)
+        ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }
 
     fun getMeta(key: String): String? = readableDatabase.rawQuery(
         "SELECT value FROM meta WHERE key=?",
         arrayOf(key)
     ).use { if (it.moveToFirst()) it.getString(0) else null }
 
-    private fun putMeta(db: SQLiteDatabase, key: String, value: String) {
-        val values = ContentValues().apply {
+    fun getMetaLong(key: String): Long = getMeta(key)?.toLongOrNull() ?: 0L
+
+    fun putMeta(key: String, value: String?) {
+        val db = writableDatabase
+        if (value == null) {
+            db.delete("meta", "key=?", arrayOf(key))
+            return
+        }
+        val v = ContentValues().apply {
             put("key", key)
             put("value", value)
         }
-        db.insertWithOnConflict("meta", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        db.insertWithOnConflict("meta", null, v, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    fun replaceFromM3u(reader: BufferedReader, sourceUrl: String): Int {
+    fun newGeneration(): String = System.currentTimeMillis().toString()
+
+    fun <T> inTransaction(block: () -> T): T {
         val db = writableDatabase
-        var attrs: Map<String, String> = emptyMap()
-        var pendingName: String? = null
-        var index = 0
-        var inserted = 0
-
         db.beginTransaction()
-        try {
-            db.delete("catalog", null, null)
-            val stmt = db.compileStatement(
-                """
-                INSERT OR REPLACE INTO catalog(
-                    name,url,logo,group_name,content_type,series_key,season,episode,sort_index
-                ) VALUES(?,?,?,?,?,?,?,?,?)
-                """.trimIndent()
-            )
-
-            reader.lineSequence().forEach { raw ->
-                val line = raw.trim().removePrefix("\uFEFF")
-                if (line.isBlank()) return@forEach
-
-                if (line.startsWith("#EXTINF", ignoreCase = true)) {
-                    attrs = attrRegex.findAll(line).associate {
-                        it.groupValues[1].lowercase() to it.groupValues[2]
-                    }
-                    pendingName = line.substringAfterLast(',', "Conteúdo").trim().ifBlank { "Conteúdo" }
-                    return@forEach
-                }
-
-                if (!line.startsWith("#") && pendingName != null) {
-                    val name = attrs["tvg-name"]?.takeIf { it.isNotBlank() } ?: pendingName.orEmpty()
-                    val group = attrs["group-title"]?.takeIf { it.isNotBlank() } ?: "Outros"
-                    val logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
-                    val type = detectType(name, group, line)
-                    val seriesInfo = if (type == ContentType.SERIES) parseSeries(name) else null
-
-                    stmt.clearBindings()
-                    stmt.bindString(1, name)
-                    stmt.bindString(2, line)
-                    if (logo != null) stmt.bindString(3, logo) else stmt.bindNull(3)
-                    stmt.bindString(4, group)
-                    stmt.bindString(5, type.name)
-                    if (seriesInfo != null) {
-                        stmt.bindString(6, seriesInfo.first)
-                        stmt.bindLong(7, seriesInfo.second.toLong())
-                        stmt.bindLong(8, seriesInfo.third.toLong())
-                    } else {
-                        stmt.bindNull(6)
-                        stmt.bindNull(7)
-                        stmt.bindNull(8)
-                    }
-                    stmt.bindLong(9, index.toLong())
-                    stmt.executeInsert()
-
-                    index++
-                    inserted++
-                    attrs = emptyMap()
-                    pendingName = null
-                }
-            }
-
-            putMeta(db, "playlist_url", sourceUrl)
-            putMeta(db, "last_sync", System.currentTimeMillis().toString())
+        return try {
+            val result = block()
             db.setTransactionSuccessful()
-            return inserted
+            result
         } finally {
             db.endTransaction()
         }
     }
 
-    fun groups(type: ContentType): List<String> = readableDatabase.rawQuery(
-        "SELECT DISTINCT group_name FROM catalog WHERE content_type=? ORDER BY group_name COLLATE NOCASE",
-        arrayOf(type.name)
-    ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-
-    fun queryItems(
+    fun putCategory(
+        generation: String,
         type: ContentType,
-        group: String? = null,
-        search: String = "",
-        limit: Int = 1000
-    ): List<CatalogItem> {
-        val args = mutableListOf(type.name)
-        val where = buildString {
-            append("c.content_type=?")
-            if (!group.isNullOrBlank() && group != "Todos") {
-                append(" AND c.group_name=?")
-                args += group
-            }
-            if (search.isNotBlank()) {
-                append(" AND (c.name LIKE ? OR c.group_name LIKE ?)")
-                val q = "%${search.trim()}%"
-                args += q
-                args += q
-            }
+        categoryId: String,
+        name: String,
+        sortIndex: Int
+    ) {
+        val v = ContentValues().apply {
+            put("generation", generation)
+            put("content_type", type.name)
+            put("category_id", categoryId)
+            put("name", name.ifBlank { "Outros" })
+            put("sort_index", sortIndex)
         }
-        args += limit.toString()
-        return readableDatabase.rawQuery(baseSelect() + " WHERE $where ORDER BY c.sort_index LIMIT ?", args.toTypedArray()).use(::readItems)
+        writableDatabase.insertWithOnConflict(
+            "categories",
+            null,
+            v,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
     }
 
-    fun querySeries(group: String? = null, search: String = "", limit: Int = 800): List<CatalogItem> {
-        val args = mutableListOf<String>()
+    fun putItem(generation: String, seed: CatalogSeed) {
+        val v = ContentValues().apply {
+            put("generation", generation)
+            put("item_key", seed.itemKey)
+            putNullable("source_id", seed.sourceId)
+            put("name", seed.name.ifBlank { "Sem título" })
+            putNullable("url", seed.url)
+            putNullable("image", seed.image)
+            putNullable("backdrop", seed.backdrop)
+            putNullable("category_id", seed.categoryId)
+            put("category_name", seed.categoryName.ifBlank { "Outros" })
+            put("content_type", seed.type.name)
+            putNullable("series_id", seed.seriesId)
+            putNullable("series_key", seed.seriesKey)
+            putNullableInt("season", seed.season)
+            putNullableInt("episode", seed.episode)
+            putNullable("plot", seed.plot)
+            putNullable("rating", seed.rating)
+            putNullable("container_extension", seed.containerExtension)
+            put("sort_index", seed.sortIndex)
+        }
+        writableDatabase.insertWithOnConflict(
+            "items",
+            null,
+            v,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    fun completeGeneration(
+        generation: String,
+        sourceUrl: String,
+        sourceKind: String,
+        sourceName: String
+    ) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            putMetaInternal(db, "active_generation", generation)
+            putMetaInternal(db, "playlist_url", sourceUrl)
+            putMetaInternal(db, "source_kind", sourceKind)
+            putMetaInternal(db, "source_name", sourceName)
+            putMetaInternal(db, "last_sync", System.currentTimeMillis().toString())
+            db.delete("items", "generation<>?", arrayOf(generation))
+            db.delete("categories", "generation<>?", arrayOf(generation))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun cancelGeneration(generation: String) {
+        writableDatabase.delete("items", "generation=?", arrayOf(generation))
+        writableDatabase.delete("categories", "generation=?", arrayOf(generation))
+    }
+
+    fun categories(type: ContentType): List<CategoryEntry> {
+        val generation = activeGeneration() ?: return emptyList()
+        return readableDatabase.rawQuery(
+            """
+            SELECT c.category_id, c.name, COUNT(i.row_id) AS qty
+            FROM categories c
+            LEFT JOIN items i
+              ON i.generation=c.generation
+             AND i.content_type=c.content_type
+             AND i.category_id=c.category_id
+            WHERE c.generation=? AND c.content_type=?
+            GROUP BY c.category_id, c.name, c.sort_index
+            HAVING qty > 0
+            ORDER BY c.sort_index, c.name COLLATE NOCASE
+            """.trimIndent(),
+            arrayOf(generation, type.name)
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(CategoryEntry(cursor.getString(0), cursor.getString(1), cursor.getInt(2)))
+                }
+            }
+        }
+    }
+
+    fun query(
+        type: ContentType,
+        categoryId: String? = null,
+        search: String = "",
+        limit: Int = 300,
+        offset: Int = 0
+    ): List<CatalogItem> {
+        val generation = activeGeneration() ?: return emptyList()
+        val args = mutableListOf(generation, type.name)
         val where = buildString {
-            append("c.content_type='SERIES'")
-            if (!group.isNullOrBlank() && group != "Todos") {
-                append(" AND c.group_name=?")
-                args += group
+            append("i.generation=? AND i.content_type=?")
+            if (!categoryId.isNullOrBlank() && categoryId != "ALL") {
+                append(" AND i.category_id=?")
+                args += categoryId
             }
             if (search.isNotBlank()) {
-                append(" AND (COALESCE(c.series_key,c.name) LIKE ? OR c.group_name LIKE ?)")
+                append(" AND (i.name LIKE ? OR i.category_name LIKE ?)")
                 val q = "%${search.trim()}%"
                 args += q
                 args += q
             }
         }
         args += limit.toString()
+        args += offset.toString()
         return readableDatabase.rawQuery(
-            """
-            SELECT MIN(c.id), COALESCE(c.series_key,c.name), MIN(c.url), MAX(c.logo), MIN(c.group_name),
-                   'SERIES', COALESCE(c.series_key,c.name), MIN(c.season), MIN(c.episode),
-                   0, 0, 0
-            FROM catalog c
-            WHERE $where
-            GROUP BY COALESCE(c.series_key,c.name)
-            ORDER BY MIN(c.sort_index)
-            LIMIT ?
-            """.trimIndent(),
+            baseSelect() + " WHERE $where ORDER BY i.sort_index, i.name COLLATE NOCASE LIMIT ? OFFSET ?",
             args.toTypedArray()
         ).use(::readItems)
     }
 
-    fun episodes(seriesKey: String): List<CatalogItem> = readableDatabase.rawQuery(
-        baseSelect() +
-            " WHERE COALESCE(c.series_key,c.name)=? ORDER BY COALESCE(c.season,9999), COALESCE(c.episode,9999), c.sort_index",
-        arrayOf(seriesKey)
-    ).use(::readItems)
-
-    fun queryFavorites(search: String = "", limit: Int = 1000): List<CatalogItem> {
-        val args = mutableListOf<String>()
-        val searchSql = if (search.isBlank()) "" else {
+    fun favorites(
+        search: String = "",
+        limit: Int = 500
+    ): List<CatalogItem> {
+        val generation = activeGeneration() ?: return emptyList()
+        val args = mutableListOf(generation)
+        val extra = if (search.isBlank()) "" else {
             val q = "%${search.trim()}%"
             args += q
             args += q
-            " AND (c.name LIKE ? OR c.group_name LIKE ?)"
+            " AND (i.name LIKE ? OR i.category_name LIKE ?)"
         }
         args += limit.toString()
         return readableDatabase.rawQuery(
-            baseSelect() + " WHERE f.url IS NOT NULL $searchSql ORDER BY c.sort_index LIMIT ?",
+            baseSelect() +
+                " WHERE i.generation=? AND f.item_key IS NOT NULL AND i.content_type!='EPISODE' $extra" +
+                " ORDER BY i.name COLLATE NOCASE LIMIT ?",
             args.toTypedArray()
         ).use(::readItems)
     }
 
-    fun continueWatching(limit: Int = 24): List<CatalogItem> = readableDatabase.rawQuery(
-        baseSelect() +
-            " WHERE p.position_ms>30000 AND (p.duration_ms<=0 OR CAST(p.position_ms AS REAL)/CAST(p.duration_ms AS REAL)<0.95)" +
-            " ORDER BY p.updated_at DESC LIMIT ?",
-        arrayOf(limit.toString())
-    ).use(::readItems)
+    fun continueWatching(limit: Int = 30): List<CatalogItem> {
+        val generation = activeGeneration() ?: return emptyList()
+        return readableDatabase.rawQuery(
+            baseSelect() +
+                " WHERE i.generation=? AND i.content_type IN ('MOVIE','EPISODE')" +
+                " AND p.position_ms>30000" +
+                " AND (p.duration_ms<=0 OR CAST(p.position_ms AS REAL)/CAST(p.duration_ms AS REAL)<0.95)" +
+                " ORDER BY p.updated_at DESC LIMIT ?",
+            arrayOf(generation, limit.toString())
+        ).use(::readItems)
+    }
 
-    fun toggleFavorite(url: String): Boolean {
+    fun episodes(parent: CatalogItem): List<CatalogItem> {
+        val generation = activeGeneration() ?: return emptyList()
+        return if (!parent.seriesId.isNullOrBlank()) {
+            readableDatabase.rawQuery(
+                baseSelect() +
+                    " WHERE i.generation=? AND i.content_type='EPISODE' AND i.series_id=?" +
+                    " ORDER BY COALESCE(i.season,9999), COALESCE(i.episode,9999), i.sort_index",
+                arrayOf(generation, parent.seriesId)
+            ).use(::readItems)
+        } else {
+            readableDatabase.rawQuery(
+                baseSelect() +
+                    " WHERE i.generation=? AND i.content_type='EPISODE' AND i.series_key=?" +
+                    " ORDER BY COALESCE(i.season,9999), COALESCE(i.episode,9999), i.sort_index",
+                arrayOf(generation, parent.seriesKey ?: parent.name)
+            ).use(::readItems)
+        }
+    }
+
+    fun replaceEpisodes(parent: CatalogItem, episodes: List<CatalogSeed>) {
+        val generation = activeGeneration() ?: return
         val db = writableDatabase
-        val exists = db.rawQuery("SELECT 1 FROM favorites WHERE url=? LIMIT 1", arrayOf(url)).use { it.moveToFirst() }
+        db.beginTransaction()
+        try {
+            if (!parent.seriesId.isNullOrBlank()) {
+                db.delete(
+                    "items",
+                    "generation=? AND content_type='EPISODE' AND series_id=?",
+                    arrayOf(generation, parent.seriesId)
+                )
+            } else {
+                db.delete(
+                    "items",
+                    "generation=? AND content_type='EPISODE' AND series_key=?",
+                    arrayOf(generation, parent.seriesKey ?: parent.name)
+                )
+            }
+            episodes.forEach { putItem(generation, it) }
+            putMetaInternal(db, "series_loaded_${parent.itemKey}", System.currentTimeMillis().toString())
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun seriesLoadedAt(parent: CatalogItem): Long =
+        getMetaLong("series_loaded_${parent.itemKey}")
+
+    fun toggleFavorite(itemKey: String): Boolean {
+        val db = writableDatabase
+        val exists = db.rawQuery(
+            "SELECT 1 FROM favorites WHERE item_key=? LIMIT 1",
+            arrayOf(itemKey)
+        ).use { it.moveToFirst() }
         if (exists) {
-            db.delete("favorites", "url=?", arrayOf(url))
+            db.delete("favorites", "item_key=?", arrayOf(itemKey))
             return false
         }
-        val v = ContentValues().apply { put("url", url) }
+        val v = ContentValues().apply { put("item_key", itemKey) }
         db.insertWithOnConflict("favorites", null, v, SQLiteDatabase.CONFLICT_REPLACE)
         return true
     }
 
-    fun getProgress(url: String): Pair<Long, Long> = readableDatabase.rawQuery(
-        "SELECT position_ms,duration_ms FROM progress WHERE url=?",
-        arrayOf(url)
+    fun progress(itemKey: String): Pair<Long, Long> = readableDatabase.rawQuery(
+        "SELECT position_ms,duration_ms FROM progress WHERE item_key=?",
+        arrayOf(itemKey)
     ).use { if (it.moveToFirst()) it.getLong(0) to it.getLong(1) else 0L to 0L }
 
-    fun saveProgress(url: String, positionMs: Long, durationMs: Long) {
+    fun saveProgress(itemKey: String, positionMs: Long, durationMs: Long) {
         if (positionMs <= 0L) return
         val v = ContentValues().apply {
-            put("url", url)
+            put("item_key", itemKey)
             put("position_ms", positionMs)
             put("duration_ms", durationMs)
             put("updated_at", System.currentTimeMillis())
         }
-        writableDatabase.insertWithOnConflict("progress", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+        writableDatabase.insertWithOnConflict(
+            "progress",
+            null,
+            v,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
     }
 
-    private fun baseSelect() =
+    fun clearProgress(itemKey: String) {
+        writableDatabase.delete("progress", "item_key=?", arrayOf(itemKey))
+    }
+
+    private fun baseSelect(): String =
         """
-        SELECT c.id,c.name,c.url,c.logo,c.group_name,c.content_type,c.series_key,c.season,c.episode,
-               CASE WHEN f.url IS NULL THEN 0 ELSE 1 END,
-               COALESCE(p.position_ms,0),COALESCE(p.duration_ms,0)
-        FROM catalog c
-        LEFT JOIN favorites f ON f.url=c.url
-        LEFT JOIN progress p ON p.url=c.url
+        SELECT
+            i.item_key,i.source_id,i.name,i.url,i.image,i.backdrop,i.category_id,i.category_name,
+            i.content_type,i.series_id,i.series_key,i.season,i.episode,i.plot,i.rating,i.container_extension,
+            CASE WHEN f.item_key IS NULL THEN 0 ELSE 1 END AS favorite,
+            COALESCE(p.position_ms,0),COALESCE(p.duration_ms,0)
+        FROM items i
+        LEFT JOIN favorites f ON f.item_key=i.item_key
+        LEFT JOIN progress p ON p.item_key=i.item_key
         """.trimIndent()
 
-    private fun readItems(c: Cursor): List<CatalogItem> = buildList {
-        while (c.moveToNext()) {
+    private fun readItems(cursor: Cursor): List<CatalogItem> = buildList {
+        while (cursor.moveToNext()) {
             add(
                 CatalogItem(
-                    id = c.getLong(0),
-                    name = c.getString(1),
-                    url = c.getString(2),
-                    logo = if (c.isNull(3)) null else c.getString(3),
-                    group = c.getString(4),
-                    type = ContentType.valueOf(c.getString(5)),
-                    seriesKey = if (c.isNull(6)) null else c.getString(6),
-                    season = if (c.isNull(7)) null else c.getInt(7),
-                    episode = if (c.isNull(8)) null else c.getInt(8),
-                    favorite = c.getInt(9) == 1,
-                    progressMs = c.getLong(10),
-                    durationMs = c.getLong(11)
+                    itemKey = cursor.getString(0),
+                    sourceId = cursor.stringOrNull(1),
+                    name = cursor.getString(2),
+                    url = cursor.stringOrNull(3),
+                    image = cursor.stringOrNull(4),
+                    backdrop = cursor.stringOrNull(5),
+                    categoryId = cursor.stringOrNull(6),
+                    categoryName = cursor.getString(7),
+                    type = ContentType.valueOf(cursor.getString(8)),
+                    seriesId = cursor.stringOrNull(9),
+                    seriesKey = cursor.stringOrNull(10),
+                    season = cursor.intOrNull(11),
+                    episode = cursor.intOrNull(12),
+                    plot = cursor.stringOrNull(13),
+                    rating = cursor.stringOrNull(14),
+                    containerExtension = cursor.stringOrNull(15),
+                    favorite = cursor.getInt(16) == 1,
+                    progressMs = cursor.getLong(17),
+                    durationMs = cursor.getLong(18)
                 )
             )
         }
     }
 
-    private fun detectType(name: String, group: String, url: String): ContentType {
-        val value = "$group $name $url".lowercase()
-        if (listOf("/series/", "séries", "series", "temporada", "season", " s01e", " s02e").any(value::contains)) {
-            return ContentType.SERIES
+    private fun putMetaInternal(db: SQLiteDatabase, key: String, value: String) {
+        val v = ContentValues().apply {
+            put("key", key)
+            put("value", value)
         }
-        if (listOf("/movie/", "filmes", "filme", "movie", "cinema", "vod").any(value::contains)) {
-            return ContentType.MOVIE
-        }
-        return ContentType.LIVE
+        db.insertWithOnConflict("meta", null, v, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    private fun parseSeries(name: String): Triple<String, Int, Int> {
-        val match = seasonEpisode.find(name) ?: xEpisode.find(name)
-        if (match != null) {
-            val key = match.groupValues[1].trim().trimEnd('-', '_', '.', ' ')
-            return Triple(key.ifBlank { name }, match.groupValues[2].toInt(), match.groupValues[3].toInt())
-        }
-        return Triple(name, 1, 1)
+    private fun ContentValues.putNullable(key: String, value: String?) {
+        if (value == null) putNull(key) else put(key, value)
     }
+
+    private fun ContentValues.putNullableInt(key: String, value: Int?) {
+        if (value == null) putNull(key) else put(key, value)
+    }
+
+    private fun Cursor.stringOrNull(index: Int): String? =
+        if (isNull(index)) null else getString(index)
+
+    private fun Cursor.intOrNull(index: Int): Int? =
+        if (isNull(index)) null else getInt(index)
 }

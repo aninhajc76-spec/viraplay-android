@@ -6,13 +6,19 @@ import com.viraplay.shared.Http
 import org.json.JSONObject
 
 class AdminRepository {
-    companion object { const val DELETED_MARKER = "__VIRAPLAY_DELETED__" }
+    companion object {
+        const val DELETED_MARKER = "__VIRAPLAY_DELETED__"
+    }
 
     private fun auth(token: String) = mapOf("Authorization" to "Bearer $token")
 
     fun list(token: String): List<AdminDevice> =
         Http.parseDevices(
-            Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/devices", auth(token))
+            Http.getText(
+                "${AppConfig.SERVER_BASE_URL}/api/admin/devices",
+                auth(token),
+                maxChars = 2_000_000
+            )
         ).filter { it.label != DELETED_MARKER }
 
     fun claim(token: String, code: String, label: String, playlist: String) {
@@ -23,7 +29,13 @@ class AdminRepository {
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/claim", body, auth(token))
     }
 
-    fun update(token: String, deviceId: String, enabled: Boolean, playlist: String, label: String) {
+    fun update(
+        token: String,
+        deviceId: String,
+        enabled: Boolean,
+        playlist: String,
+        label: String
+    ) {
         val body = JSONObject()
             .put("device_id", deviceId)
             .put("enabled", enabled)

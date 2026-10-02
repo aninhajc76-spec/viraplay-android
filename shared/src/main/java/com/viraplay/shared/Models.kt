@@ -3,7 +3,8 @@ package com.viraplay.shared
 enum class ContentType {
     LIVE,
     MOVIE,
-    SERIES
+    SERIES,
+    EPISODE
 }
 
 data class ChannelItem(

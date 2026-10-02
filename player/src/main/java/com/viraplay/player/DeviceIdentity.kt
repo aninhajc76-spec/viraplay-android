@@ -22,8 +22,8 @@ class DeviceIdentity(context: Context) {
     val pairingCode: String by lazy {
         prefs.getString("pairing_code", null) ?: buildString {
             val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-            val r = SecureRandom()
-            repeat(6) { append(alphabet[r.nextInt(alphabet.length)]) }
+            val random = SecureRandom()
+            repeat(6) { append(alphabet[random.nextInt(alphabet.length)]) }
         }.also { prefs.edit().putString("pairing_code", it).apply() }
     }
 }

@@ -1,0 +1,42 @@
+VIRAPLAY 3.0.0 - PACOTE DE TESTE CONSOLIDADO
+
+Objetivo: versão para testar com os primeiros clientes antes de qualquer expansão.
+
+PRINCIPAIS MUDANÇAS
+- Android celular e Android TV/TV Box no mesmo APK.
+- Layout específico para TV e layout específico para celular.
+- Detecção de fonte Xtream pela URL get.php e uso de player_api.php quando disponível.
+- TV, Filmes e Séries separados pelos dados do servidor, sem depender de palavras no nome.
+- Capas e logos do servidor.
+- Séries > temporadas > episódios.
+- Favoritos.
+- Continuar assistindo e progresso salvo.
+- Pergunta para continuar de onde parou ou reiniciar.
+- Cache local: depois da primeira sincronização o app abre com o catálogo salvo.
+- Atualização automática do catálogo a cada 6 horas e manual pelo botão Atualizar.
+- Se o backend ViraPlay ficar temporariamente indisponível, o catálogo já salvo continua utilizável.
+- Player em tela cheia; no celular abre horizontal e permite girar.
+- Uma tentativa automática com extensão alternativa TS/M3U8 para canal ao vivo quando aplicável.
+- Suporte ViraPlay no WhatsApp +55 84 9927-6322.
+- ADM com Painel, Pendentes e Clientes.
+- Aparelho novo aparece automaticamente em Pendentes.
+- Ativação sem redigitar código: nome + URL M3U.
+- ADM detecta e mostra o username da URL quando existir.
+- Editar, bloquear/liberar e excluir aparelho.
+
+TESTE RECOMENDADO ANTES DE PASSAR AOS 4 CLIENTES
+1. Instalar Cliente e ADM em um aparelho seu.
+2. Confirmar que o código aparece em Pendentes no ADM.
+3. Ativar com nome + M3U.
+4. Confirmar categorias de Ao vivo, Filmes e Séries.
+5. Abrir 3 canais de categorias diferentes.
+6. Abrir 2 filmes e verificar capas.
+7. Abrir uma série, temporada e episódio.
+8. Assistir um episódio por mais de 1 minuto, sair e abrir de novo; deve oferecer Continuar.
+9. Fechar completamente o app e abrir; o catálogo deve aparecer usando cache sem refazer a lista inteira.
+10. Testar Favoritos.
+11. Testar Bloquear/Liberar no ADM.
+12. Testar Suporte ViraPlay.
+13. Testar em Android TV/TV Box com controle remoto.
+
+A Roku será uma segunda interface no futuro, usando a mesma API e o mesmo fluxo de ativação.
