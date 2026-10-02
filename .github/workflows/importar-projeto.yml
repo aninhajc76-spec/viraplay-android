@@ -14,19 +14,19 @@ jobs:
       - name: Baixar repositório
         uses: actions/checkout@v4
 
-      - name: Localizar e extrair atualização
+      - name: Localizar e extrair ViraPlay v1.1 FIX
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE="$(ls -1t ViraPlay_FINAL_*.zip viraplay-repo-source-v0.3*.zip 2>/dev/null | head -n 1 || true)"
+          ZIP_FILE="$(find . -maxdepth 1 -type f -name 'ViraPlay_FINAL_v1_1_FIX*.zip' -print | head -n 1)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Nenhum pacote ViraPlay encontrado."
+            echo "Pacote ViraPlay_FINAL_v1_1_FIX não encontrado."
             exit 1
           fi
 
-          echo "Usando pacote: $ZIP_FILE"
+          echo "Usando pacote correto: $ZIP_FILE"
 
           rm -rf .viraplay_tmp
           mkdir .viraplay_tmp
@@ -39,10 +39,9 @@ jobs:
             .viraplay_tmp/ ./
 
           rm -rf .viraplay_tmp
-          rm -f ViraPlay_FINAL_*.zip
-          rm -f viraplay-repo-source-v0.3*.zip
+          rm -f ViraPlay_FINAL_v1_1_FIX*.zip
 
-      - name: Salvar projeto no GitHub
+      - name: Salvar ViraPlay v1.1 no GitHub
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -53,6 +52,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nenhuma alteração para salvar."
           else
-            git commit -m "Importa ViraPlay v1.1 final"
+            git commit -m "Instala ViraPlay v1.1 FIX"
             git push
           fi
