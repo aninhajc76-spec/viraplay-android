@@ -1,11 +1,18 @@
 package com.viraplay.shared
 
+enum class ContentType {
+    LIVE,
+    MOVIE,
+    SERIES
+}
+
 data class ChannelItem(
     val name: String,
     val url: String,
     val logo: String? = null,
     val group: String = "Outros",
-    val tvgId: String? = null
+    val tvgId: String? = null,
+    val type: ContentType = ContentType.LIVE
 )
 
 data class ParsedPlaylist(
