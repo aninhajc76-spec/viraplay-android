@@ -52,7 +52,9 @@ private val Purple = Color(0xFF8B3DFF)
 private val Green = Color(0xFF4BE38A)
 private val Danger = Color(0xFFFF5D73)
 
-private enum class HomeSection(val label: String) {
+private enum class HomeSection(
+    val label: String
+) {
     LIVE("Ao vivo"),
     MOVIES("Filmes"),
     SERIES("Séries"),
@@ -60,9 +62,15 @@ private enum class HomeSection(val label: String) {
 }
 
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
+
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
-        setContent { ViraPlayApp() }
+
+        setContent {
+            ViraPlayApp()
+        }
     }
 }
 
@@ -75,7 +83,10 @@ private data class RefreshResult(
 
 @Composable
 fun ViraPlayApp() {
-    val context = LocalContext.current
+
+    val context =
+        LocalContext.current
+
     val uiMode =
         context.getSystemService(
             Context.UI_MODE_SERVICE
@@ -99,7 +110,9 @@ fun ViraPlayApp() {
         rememberCoroutineScope()
 
     var status by remember {
-        mutableStateOf("Conectando...")
+        mutableStateOf(
+            "Conectando..."
+        )
     }
 
     var enabled by remember {
@@ -107,15 +120,21 @@ fun ViraPlayApp() {
     }
 
     var parsed by remember {
-        mutableStateOf<ParsedPlaylist?>(null)
+        mutableStateOf<ParsedPlaylist?>(
+            null
+        )
     }
 
     var playlistUrl by remember {
-        mutableStateOf<String?>(null)
+        mutableStateOf<String?>(
+            null
+        )
     }
 
     var selected by remember {
-        mutableStateOf<ChannelItem?>(null)
+        mutableStateOf<ChannelItem?>(
+            null
+        )
     }
 
     var loading by remember {
@@ -125,19 +144,27 @@ fun ViraPlayApp() {
     suspend fun refresh(
         forcePlaylist: Boolean = false
     ) {
-        if (loading) return
+
+        if (loading) {
+            return
+        }
 
         loading = true
         status = "Conectando..."
 
         try {
-            val currentParsed = parsed
-            val currentUrl = playlistUrl
+
+            val currentParsed =
+                parsed
+
+            val currentUrl =
+                playlistUrl
 
             val result =
                 withContext(
                     Dispatchers.IO
                 ) {
+
                     repo.register(
                         identity.deviceId,
                         identity.deviceSecret,
@@ -155,19 +182,25 @@ fun ViraPlayApp() {
                             identity.deviceSecret
                         )
 
+                    val remotePlaylistUrl =
+                        cfg.playlistUrl
+
                     if (!cfg.enabled) {
+
                         RefreshResult(
                             enabled = false,
                             playlistUrl =
-                                cfg.playlistUrl,
+                                remotePlaylistUrl,
                             playlist = null,
                             status =
                                 "Dispositivo aguardando liberação"
                         )
+
                     } else if (
-                        cfg.playlistUrl
+                        remotePlaylistUrl
                             .isNullOrBlank()
                     ) {
+
                         RefreshResult(
                             enabled = true,
                             playlistUrl = null,
@@ -175,32 +208,37 @@ fun ViraPlayApp() {
                             status =
                                 "Ativado. Aguardando lista."
                         )
+
                     } else {
+
                         val shouldReload =
                             forcePlaylist ||
                                 currentParsed == null ||
-                                cfg.playlistUrl !=
+                                remotePlaylistUrl !=
                                     currentUrl
 
                         if (shouldReload) {
+
                             val p =
                                 repo.playlist(
-                                    cfg.playlistUrl
+                                    remotePlaylistUrl
                                 )
 
                             RefreshResult(
                                 enabled = true,
                                 playlistUrl =
-                                    cfg.playlistUrl,
+                                    remotePlaylistUrl,
                                 playlist = p,
                                 status =
                                     "${p.channels.size} itens carregados"
                             )
+
                         } else {
+
                             RefreshResult(
                                 enabled = true,
                                 playlistUrl =
-                                    cfg.playlistUrl,
+                                    remotePlaylistUrl,
                                 playlist =
                                     currentParsed,
                                 status =
@@ -227,29 +265,40 @@ fun ViraPlayApp() {
             }
 
         } catch (e: Throwable) {
+
             status =
                 when (e) {
+
                     is OutOfMemoryError ->
                         "Lista muito grande para a memória deste aparelho"
 
                     else ->
                         "Falha: " +
-                            (e.message
-                                ?: "não foi possível carregar")
-                                .replace("\n", " ")
+                            (
+                                e.message
+                                    ?: "não foi possível carregar"
+                            )
+                                .replace(
+                                    "\n",
+                                    " "
+                                )
                                 .take(90)
                 }
+
         } finally {
+
             loading = false
         }
     }
 
     LaunchedEffect(Unit) {
+
         refresh(
             forcePlaylist = true
         )
 
         while (true) {
+
             delay(
                 if (parsed == null) {
                     10_000
@@ -273,13 +322,17 @@ fun ViraPlayApp() {
                 surface = Panel
             )
     ) {
+
         Surface(
             modifier =
                 Modifier.fillMaxSize(),
             color = Bg
         ) {
+
             when {
+
                 selected != null -> {
+
                     VideoScreen(
                         channel =
                             selected!!,
@@ -291,6 +344,7 @@ fun ViraPlayApp() {
 
                 parsed != null &&
                     enabled -> {
+
                     HomeScreen(
                         playlist =
                             parsed!!,
@@ -299,7 +353,9 @@ fun ViraPlayApp() {
                         status =
                             status,
                         onReload = {
+
                             scope.launch {
+
                                 refresh(
                                     forcePlaylist =
                                         true
@@ -313,16 +369,18 @@ fun ViraPlayApp() {
                 }
 
                 else -> {
+
                     ActivationScreen(
                         code =
-                            identity
-                                .pairingCode,
+                            identity.pairingCode,
                         status =
                             status,
                         loading =
                             loading,
                         onRefresh = {
+
                             scope.launch {
+
                                 refresh(
                                     forcePlaylist =
                                         true
@@ -343,6 +401,7 @@ private fun ActivationScreen(
     loading: Boolean,
     onRefresh: () -> Unit
 ) {
+
     Column(
         modifier =
             Modifier
@@ -353,6 +412,7 @@ private fun ActivationScreen(
         verticalArrangement =
             Arrangement.Center
     ) {
+
         Image(
             painter =
                 painterResource(
@@ -371,7 +431,7 @@ private fun ActivationScreen(
         )
 
         Text(
-            "ViraPlay",
+            text = "ViraPlay",
             color = Color.White,
             fontSize = 40.sp,
             fontWeight =
@@ -379,7 +439,8 @@ private fun ActivationScreen(
         )
 
         Text(
-            "ENTRETENIMENTO SEM LIMITES",
+            text =
+                "ENTRETENIMENTO SEM LIMITES",
             color = Cyan,
             fontSize = 11.sp,
             letterSpacing = 2.sp
@@ -402,24 +463,32 @@ private fun ActivationScreen(
             modifier =
                 Modifier.fillMaxWidth()
         ) {
+
             Column(
                 modifier =
                     Modifier.padding(22.dp),
                 horizontalAlignment =
                     Alignment.CenterHorizontally
             ) {
+
                 Text(
-                    "Ative seu dispositivo",
-                    color = Color.White,
-                    fontSize = 22.sp,
+                    text =
+                        "Ative seu dispositivo",
+                    color =
+                        Color.White,
+                    fontSize =
+                        22.sp,
                     fontWeight =
                         FontWeight.Medium
                 )
 
                 Text(
-                    "Informe este código ao atendimento ViraPlay",
-                    color = Color.Gray,
-                    fontSize = 13.sp
+                    text =
+                        "Informe este código ao atendimento ViraPlay",
+                    color =
+                        Color.Gray,
+                    fontSize =
+                        13.sp
                 )
 
                 Spacer(
@@ -433,8 +502,9 @@ private fun ActivationScreen(
                         ),
                     color = Panel2
                 ) {
+
                     Text(
-                        code,
+                        text = code,
                         modifier =
                             Modifier.padding(
                                 horizontal =
@@ -458,16 +528,16 @@ private fun ActivationScreen(
                 )
 
                 if (loading) {
+
                     LinearProgressIndicator(
                         modifier =
-                            Modifier
-                                .fillMaxWidth(),
+                            Modifier.fillMaxWidth(),
                         color = Cyan
                     )
                 }
 
                 Text(
-                    status,
+                    text = status,
                     color =
                         if (
                             status.startsWith(
@@ -498,12 +568,14 @@ private fun ActivationScreen(
                             )
                             .fillMaxWidth()
                 ) {
+
                     Text(
-                        if (loading) {
-                            "Carregando..."
-                        } else {
-                            "Atualizar agora"
-                        }
+                        text =
+                            if (loading) {
+                                "Carregando..."
+                            } else {
+                                "Atualizar agora"
+                            }
                     )
                 }
             }
@@ -519,10 +591,12 @@ private fun HomeScreen(
     onReload: () -> Unit,
     onPlay: (ChannelItem) -> Unit
 ) {
+
     val context =
         LocalContext.current
 
     var favorites by remember {
+
         mutableStateOf(
             loadFavorites(
                 context
@@ -531,6 +605,7 @@ private fun HomeScreen(
     }
 
     var section by remember {
+
         mutableStateOf(
             HomeSection.LIVE
         )
@@ -546,8 +621,11 @@ private fun HomeScreen(
             playlist,
             favorites
         ) {
+
             when (section) {
+
                 HomeSection.LIVE ->
+
                     playlist.channels
                         .filter {
                             it.type ==
@@ -555,6 +633,7 @@ private fun HomeScreen(
                         }
 
                 HomeSection.MOVIES ->
+
                     playlist.channels
                         .filter {
                             it.type ==
@@ -562,6 +641,7 @@ private fun HomeScreen(
                         }
 
                 HomeSection.SERIES ->
+
                     playlist.channels
                         .filter {
                             it.type ==
@@ -569,12 +649,13 @@ private fun HomeScreen(
                         }
 
                 HomeSection.FAVORITES ->
+
                     playlist.channels
                         .filter {
-                            favorites
-                                .contains(
-                                    it.url
-                                )
+
+                            favorites.contains(
+                                it.url
+                            )
                         }
             }
         }
@@ -584,10 +665,15 @@ private fun HomeScreen(
             sectionItems,
             search
         ) {
+
             if (search.isBlank()) {
+
                 sectionItems
+
             } else {
+
                 sectionItems.filter {
+
                     it.name.contains(
                         search,
                         true
@@ -601,10 +687,15 @@ private fun HomeScreen(
         }
 
     val groups =
-        remember(searched) {
+        remember(
+            searched
+        ) {
+
             listOf("Todos") +
                 searched
-                    .map { it.group }
+                    .map {
+                        it.group
+                    }
                     .filter {
                         it.isNotBlank()
                     }
@@ -612,12 +703,21 @@ private fun HomeScreen(
                     .sorted()
         }
 
-    var group by remember(section) {
-        mutableStateOf("Todos")
+    var group by remember(
+        section
+    ) {
+
+        mutableStateOf(
+            "Todos"
+        )
     }
 
-    if (group !in groups) {
-        group = "Todos"
+    if (
+        group !in groups
+    ) {
+
+        group =
+            "Todos"
     }
 
     val visible =
@@ -625,11 +725,19 @@ private fun HomeScreen(
             searched,
             group
         ) {
-            if (group == "Todos") {
+
+            if (
+                group == "Todos"
+            ) {
+
                 searched
+
             } else {
+
                 searched.filter {
-                    it.group == group
+
+                    it.group ==
+                        group
                 }
             }
         }
@@ -646,15 +754,16 @@ private fun HomeScreen(
                     }
                 )
     ) {
+
         Row(
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
+
             Image(
                 painter =
                     painterResource(
-                        R.drawable
-                            .viraplay_logo
+                        R.drawable.viraplay_logo
                     ),
                 contentDescription =
                     null,
@@ -675,9 +784,11 @@ private fun HomeScreen(
             )
 
             Column {
+
                 Row {
+
                     Text(
-                        "Vira",
+                        text = "Vira",
                         color =
                             Color.White,
                         fontSize =
@@ -687,529 +798,4 @@ private fun HomeScreen(
                                 25.sp
                             },
                         fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Text(
-                        "Play",
-                        color = Cyan,
-                        fontSize =
-                            if (isTv) {
-                                32.sp
-                            } else {
-                                25.sp
-                            },
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    status,
-                    color =
-                        Color.Gray,
-                    fontSize =
-                        11.sp
-                )
-            }
-
-            Spacer(
-                Modifier.weight(1f)
-            )
-
-            TextButton(
-                onClick =
-                    onReload
-            ) {
-                Text("Atualizar")
-            }
-        }
-
-        Spacer(
-            Modifier.height(8.dp)
-        )
-
-        LazyRow(
-            horizontalArrangement =
-                Arrangement.spacedBy(
-                    8.dp
-                )
-        ) {
-            items(
-                HomeSection.entries
-            ) { item ->
-                FilterChip(
-                    selected =
-                        section == item,
-                    onClick = {
-                        section = item
-                        group = "Todos"
-                        search = ""
-                    },
-                    label = {
-                        Text(item.label)
-                    }
-                )
-            }
-        }
-
-        Spacer(
-            Modifier.height(8.dp)
-        )
-
-        OutlinedTextField(
-            value = search,
-            onValueChange = {
-                search = it
-            },
-            modifier =
-                Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = {
-                Text(
-                    "Buscar conteúdo"
-                )
-            }
-        )
-
-        Spacer(
-            Modifier.height(8.dp)
-        )
-
-        LazyRow(
-            horizontalArrangement =
-                Arrangement.spacedBy(
-                    8.dp
-                )
-        ) {
-            items(groups) { g ->
-                FilterChip(
-                    selected =
-                        group == g,
-                    onClick = {
-                        group = g
-                    },
-                    label = {
-                        Text(
-                            g,
-                            maxLines = 1,
-                            overflow =
-                                TextOverflow.Ellipsis
-                        )
-                    }
-                )
-            }
-        }
-
-        Spacer(
-            Modifier.height(10.dp)
-        )
-
-        if (visible.isEmpty()) {
-            Box(
-                modifier =
-                    Modifier.fillMaxSize(),
-                contentAlignment =
-                    Alignment.Center
-            ) {
-                Text(
-                    if (
-                        section ==
-                        HomeSection.FAVORITES
-                    ) {
-                        "Nenhum favorito ainda"
-                    } else {
-                        "Nenhum conteúdo encontrado"
-                    },
-                    color = Color.Gray
-                )
-            }
-        } else {
-            LazyVerticalGrid(
-                columns =
-                    GridCells.Fixed(
-                        if (isTv) 5 else 2
-                    ),
-                horizontalArrangement =
-                    Arrangement.spacedBy(
-                        10.dp
-                    ),
-                verticalArrangement =
-                    Arrangement.spacedBy(
-                        10.dp
-                    ),
-                modifier =
-                    Modifier.fillMaxSize()
-            ) {
-                items(
-                    visible,
-                    key = {
-                        it.name +
-                            it.url
-                    }
-                ) { item ->
-                    ChannelCard(
-                        channel =
-                            item,
-                        isTv =
-                            isTv,
-                        favorite =
-                            favorites
-                                .contains(
-                                    item.url
-                                ),
-                        onFavorite = {
-                            favorites =
-                                toggleFavorite(
-                                    context,
-                                    favorites,
-                                    item.url
-                                )
-                        },
-                        onClick = {
-                            onPlay(item)
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChannelCard(
-    channel: ChannelItem,
-    isTv: Boolean,
-    favorite: Boolean,
-    onFavorite: () -> Unit,
-    onClick: () -> Unit
-) {
-    Card(
-        colors =
-            CardDefaults
-                .cardColors(
-                    containerColor =
-                        Panel
-                ),
-        shape =
-            RoundedCornerShape(
-                16.dp
-            ),
-        modifier =
-            Modifier
-                .height(
-                    if (isTv) {
-                        132.dp
-                    } else {
-                        124.dp
-                    }
-                )
-                .fillMaxWidth()
-                .focusable()
-                .clickable(
-                    onClick =
-                        onClick
-                )
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-            verticalArrangement =
-                Arrangement
-                    .SpaceBetween
-        ) {
-            Row {
-                Text(
-                    channel.name,
-                    color =
-                        Color.White,
-                    fontSize =
-                        if (isTv) {
-                            17.sp
-                        } else {
-                            15.sp
-                        },
-                    fontWeight =
-                        FontWeight.Medium,
-                    maxLines = 2,
-                    overflow =
-                        TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier.weight(1f)
-                )
-
-                Text(
-                    if (favorite) {
-                        "★"
-                    } else {
-                        "☆"
-                    },
-                    color =
-                        if (favorite) {
-                            Cyan
-                        } else {
-                            Color.Gray
-                        },
-                    fontSize = 23.sp,
-                    modifier =
-                        Modifier
-                            .padding(
-                                start = 6.dp
-                            )
-                            .clickable {
-                                onFavorite()
-                            }
-                )
-            }
-
-            Column {
-                Text(
-                    when (
-                        channel.type
-                    ) {
-                        ContentType.LIVE ->
-                            "AO VIVO"
-
-                        ContentType.MOVIE ->
-                            "FILME"
-
-                        ContentType.SERIES ->
-                            "SÉRIE"
-                    },
-                    color =
-                        when (
-                            channel.type
-                        ) {
-                            ContentType.LIVE ->
-                                Green
-
-                            ContentType.MOVIE ->
-                                Cyan
-
-                            ContentType.SERIES ->
-                                Purple
-                        },
-                    fontSize = 10.sp,
-                    fontWeight =
-                        FontWeight.Bold
-                )
-
-                Text(
-                    channel.group,
-                    color = Color.Gray,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow =
-                        TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun VideoScreen(
-    channel: ChannelItem,
-    onBack: () -> Unit
-) {
-    BackHandler {
-        onBack()
-    }
-
-    val context =
-        LocalContext.current
-
-    var error by
-        remember(channel.url) {
-            mutableStateOf<String?>(
-                null
-            )
-        }
-
-    val player =
-        remember(channel.url) {
-            ExoPlayer
-                .Builder(context)
-                .build()
-                .apply {
-                    addListener(
-                        object :
-                            Player.Listener {
-                            override fun onPlayerError(
-                                playbackException:
-                                    PlaybackException
-                            ) {
-                                error =
-                                    playbackException
-                                        .message
-                                        ?.take(100)
-                                        ?: "Falha ao reproduzir"
-                            }
-                        }
-                    )
-
-                    setMediaItem(
-                        MediaItem
-                            .fromUri(
-                                channel.url
-                            )
-                    )
-
-                    prepare()
-                    playWhenReady = true
-                }
-        }
-
-    DisposableEffect(player) {
-        onDispose {
-            player.release()
-        }
-    }
-
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Color.Black
-                )
-    ) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx)
-                    .apply {
-                        this.player =
-                            player
-                        useController =
-                            true
-                    }
-            },
-            modifier =
-                Modifier.fillMaxSize()
-        )
-
-        Row(
-            modifier =
-                Modifier
-                    .align(
-                        Alignment.TopStart
-                    )
-                    .padding(12.dp),
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-            Button(
-                onClick =
-                    onBack
-            ) {
-                Text("Voltar")
-            }
-
-            Spacer(
-                Modifier.width(10.dp)
-            )
-
-            Text(
-                channel.name,
-                color = Color.White,
-                maxLines = 1,
-                overflow =
-                    TextOverflow.Ellipsis
-            )
-        }
-
-        error?.let {
-            Card(
-                colors =
-                    CardDefaults
-                        .cardColors(
-                            containerColor =
-                                Color.Black
-                                    .copy(
-                                        alpha =
-                                            0.82f
-                                    )
-                        ),
-                modifier =
-                    Modifier
-                        .align(
-                            Alignment.Center
-                        )
-                        .padding(24.dp)
-            ) {
-                Column(
-                    modifier =
-                        Modifier.padding(18.dp),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "Não foi possível reproduzir",
-                        color = Danger,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Text(
-                        it,
-                        color =
-                            Color.LightGray,
-                        fontSize =
-                            12.sp,
-                        modifier =
-                            Modifier.padding(
-                                top = 8.dp
-                            )
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun loadFavorites(
-    context: Context
-): Set<String> =
-    context
-        .getSharedPreferences(
-            "viraplay_favorites",
-            Context.MODE_PRIVATE
-        )
-        .getStringSet(
-            "urls",
-            emptySet()
-        )
-        ?.toSet()
-        ?: emptySet()
-
-private fun toggleFavorite(
-    context: Context,
-    current: Set<String>,
-    url: String
-): Set<String> {
-    val updated =
-        current
-            .toMutableSet()
-            .apply {
-                if (!add(url)) {
-                    remove(url)
-                }
-            }
-            .toSet()
-
-    context
-        .getSharedPreferences(
-            "viraplay_favorites",
-            Context.MODE_PRIVATE
-        )
-        .edit()
-        .putStringSet(
-            "urls",
-            updated
-        )
-        .apply()
-
-    return updated
-}
+                            FontW
