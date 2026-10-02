@@ -55,7 +55,7 @@ private val Danger = Color(0xFFFF5D73)
 private enum class HomeSection(val label: String) {
     LIVE("Ao vivo"),
     MOVIES("Filmes"),
-    SERIES("SÃ©ries"),
+    SERIES("Séries"),
     FAVORITES("Favoritos")
 }
 
@@ -121,7 +121,7 @@ private fun ViraPlayApp() {
                             enabled = false,
                             playlistUrl = remoteUrl,
                             playlist = null,
-                            status = "Dispositivo aguardando liberaÃ§Ã£o"
+                            status = "Dispositivo aguardando liberação"
                         )
                     }
 
@@ -173,11 +173,11 @@ private fun ViraPlayApp() {
         } catch (e: Throwable) {
             status = when (e) {
                 is OutOfMemoryError ->
-                    "Lista muito grande para a memÃ³ria deste aparelho"
+                    "Lista muito grande para a memória deste aparelho"
 
                 else ->
                     "Falha: ${
-                        (e.message ?: "nÃ£o foi possÃ­vel carregar")
+                        (e.message ?: "não foi possível carregar")
                             .replace("\n", " ")
                             .take(100)
                     }"
@@ -324,313 +324,7 @@ private fun ActivationScreen(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    "Informe este cÃ³digo ao atendimento ViraPlay",
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                Surface(
-                    color = Panel2,
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(
-                        text = code,
-                        color = Color.White,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 3.sp,
-                        modifier = Modifier.padding(
-                            horizontal = 30.dp,
-                            vertical = 18.dp
-                        )
-                    )
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                if (loading) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Cyan
-                    )
-                }
-
-                Text(
-                    text = status,
-                    color = if (status.startsWith("Falha")) Danger else Color.LightGray,
-                    modifier = Modifier.padding(top = 12.dp),
-                    fontSize = 13.sp
-                )
-
-                Button(
-                    onClick = onRefresh,
-                    enabled = !loading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                ) {
-                    Text(
-                        if (loading) "Carregando..." else "Atualizar agora"
-                    )
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun ViraPlayApp() {
-    val context = LocalContext.current
-    val uiMode = context.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
-    val isTv = uiMode.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
-
-    val identity = remember { DeviceIdentity(context) }
-    val repo = remember { PlayerRepository() }
-    val scope = rememberCoroutineScope()
-
-    var status by remember { mutableStateOf("Conectando...") }
-    var enabled by remember { mutableStateOf(false) }
-    var playlist by remember { mutableStateOf<ParsedPlaylist?>(null) }
-    var playlistUrl by remember { mutableStateOf<String?>(null) }
-    var selected by remember { mutableStateOf<ChannelItem?>(null) }
-    var loading by remember { mutableStateOf(false) }
-
-    suspend fun refresh(forcePlaylist: Boolean = false) {
-        if (loading) return
-
-        loading = true
-        status = "Conectando..."
-
-        try {
-            val oldPlaylist = playlist
-            val oldUrl = playlistUrl
-
-            val result = withContext(Dispatchers.IO) {
-                repo.register(
-                    deviceId = identity.deviceId,
-                    secret = identity.deviceSecret,
-                    code = identity.pairingCode,
-                    platform = if (isTv) "ANDROID_TV" else "ANDROID_MOBILE"
-                )
-
-                val cfg = repo.config(
-                    identity.deviceId,
-                    identity.deviceSecret
-                )
-
-                val remoteUrl = cfg.playlistUrl
-
-                when {
-                    !cfg.enabled -> {
-                        RefreshResult(
-                            enabled = false,
-                            playlistUrl = remoteUrl,
-                            playlist = null,
-                            status = "Dispositivo aguardando liberaÃ§Ã£o"
-                        )
-                    }
-
-                    remoteUrl.isNullOrBlank() -> {
-                        RefreshResult(
-                            enabled = true,
-                            playlistUrl = null,
-                            playlist = null,
-                            status = "Ativado. Aguardando lista."
-                        )
-                    }
-
-                    else -> {
-                        val safeUrl: String = remoteUrl
-                        val shouldReload =
-                            forcePlaylist ||
-                                oldPlaylist == null ||
-                                safeUrl != oldUrl
-
-                        if (shouldReload) {
-                            val loaded = repo.playlist(safeUrl)
-
-                            RefreshResult(
-                                enabled = true,
-                                playlistUrl = safeUrl,
-                                playlist = loaded,
-                                status = "${loaded.channels.size} itens carregados"
-                            )
-                        } else {
-                            RefreshResult(
-                                enabled = true,
-                                playlistUrl = safeUrl,
-                                playlist = oldPlaylist,
-                                status = "${oldPlaylist?.channels?.size ?: 0} itens carregados"
-                            )
-                        }
-                    }
-                }
-            }
-
-            enabled = result.enabled
-            playlistUrl = result.playlistUrl
-            playlist = result.playlist
-            status = result.status
-
-            if (!enabled) {
-                selected = null
-            }
-        } catch (e: Throwable) {
-            status = when (e) {
-                is OutOfMemoryError ->
-                    "Lista muito grande para a memÃ³ria deste aparelho"
-
-                else ->
-                    "Falha: ${
-                        (e.message ?: "nÃ£o foi possÃ­vel carregar")
-                            .replace("\n", " ")
-                            .take(100)
-                    }"
-            }
-        } finally {
-            loading = false
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refresh(forcePlaylist = true)
-
-        while (true) {
-            delay(if (playlist == null) 10_000 else 30_000)
-            refresh(forcePlaylist = false)
-        }
-    }
-
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Cyan,
-            secondary = Purple,
-            background = Bg,
-            surface = Panel
-        )
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Bg
-        ) {
-            when {
-                selected != null -> {
-                    VideoScreen(
-                        channel = selected!!,
-                        onBack = { selected = null }
-                    )
-                }
-
-                playlist != null && enabled -> {
-                    HomeScreen(
-                        playlist = playlist!!,
-                        isTv = isTv,
-                        status = status,
-                        onReload = {
-                            scope.launch {
-                                refresh(forcePlaylist = true)
-                            }
-                        },
-                        onPlay = { selected = it }
-                    )
-                }
-
-                else -> {
-                    ActivationScreen(
-                        code = identity.pairingCode,
-                        status = status,
-                        loading = loading,
-                        onRefresh = {
-                            scope.launch {
-                                refresh(forcePlaylist = true)
-                            }
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BrandHeader(
-    large: Boolean = false
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = painterResource(R.drawable.viraplay_logo),
-            contentDescription = "ViraPlay",
-            modifier = Modifier.size(if (large) 92.dp else 48.dp),
-            contentScale = ContentScale.Fit
-        )
-
-        Spacer(Modifier.width(10.dp))
-
-        Row {
-            Text(
-                "Vira",
-                color = Color.White,
-                fontSize = if (large) 38.sp else 25.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "Play",
-                color = Cyan,
-                fontSize = if (large) 38.sp else 25.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActivationScreen(
-    code: String,
-    status: String,
-    loading: Boolean,
-    onRefresh: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        BrandHeader(large = true)
-
-        Text(
-            "ENTRETENIMENTO SEM LIMITES",
-            color = Purple,
-            fontSize = 11.sp,
-            letterSpacing = 2.sp
-        )
-
-        Spacer(Modifier.height(26.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Panel)
-        ) {
-            Column(
-                modifier = Modifier.padding(22.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Ative seu dispositivo",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(6.dp))
-
-                Text(
-                    "Informe este cÃ³digo ao atendimento ViraPlay",
+                    "Informe este código ao atendimento ViraPlay",
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
@@ -817,7 +511,7 @@ private fun HomeScreen(
             onValueChange = { search = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Buscar conteÃºdo") }
+            label = { Text("Buscar conteúdo") }
         )
 
         Spacer(Modifier.height(8.dp))
@@ -851,7 +545,7 @@ private fun HomeScreen(
                     if (section == HomeSection.FAVORITES) {
                         "Nenhum favorito ainda"
                     } else {
-                        "Nenhum conteÃºdo encontrado"
+                        "Nenhum conteúdo encontrado"
                     },
                     color = Color.Gray
                 )
@@ -923,7 +617,7 @@ private fun ChannelCard(
                 )
 
                 Text(
-                    if (favorite) "â˜…" else "â˜†",
+                    if (favorite) "★" else "☆",
                     color = if (favorite) Cyan else Color.Gray,
                     fontSize = 23.sp,
                     modifier = Modifier
@@ -937,7 +631,7 @@ private fun ChannelCard(
                     when (channel.type) {
                         ContentType.LIVE -> "AO VIVO"
                         ContentType.MOVIE -> "FILME"
-                        ContentType.SERIES -> "SÃ‰RIE"
+                        ContentType.SERIES -> "SÉRIE"
                     },
                     color = when (channel.type) {
                         ContentType.LIVE -> Green
@@ -1052,7 +746,7 @@ private fun VideoScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Não foi possivel reproduzir",
+                        "Não foi possível reproduzir",
                         color = Danger,
                         fontWeight = FontWeight.Bold
                     )
@@ -1069,6 +763,7 @@ private fun VideoScreen(
         }
     }
 }
+
 private fun loadFavorites(
     context: Context
 ): Set<String> {
@@ -1114,4 +809,3 @@ private fun toggleFavorite(
 
     return updated
 }
-                        
