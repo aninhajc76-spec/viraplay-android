@@ -1,0 +1,29 @@
+ViraPlay v1.1.0
+
+CORREÇÃO CRÍTICA
+- A lista M3U agora é lida em streaming, linha por linha.
+- O aplicativo não carrega mais todo o arquivo M3U em uma String gigante.
+- Corrige OutOfMemoryError em listas grandes.
+
+CLIENTE
+- Nova tela de ativação com logo ViraPlay.
+- Ao vivo / Filmes / Séries / Favoritos.
+- Busca por nome/grupo.
+- Filtros de categorias.
+- Favoritos locais.
+- Player Media3/ExoPlayer.
+- Atualização remota de bloqueio/lista.
+- Mensagens reais de falha.
+- Layout para celular e Android TV.
+
+ADM
+- Novo painel visual.
+- Total / ativos / bloqueados.
+- Busca.
+- Ativar dispositivo.
+- Editar nome.
+- Editar M3U.
+- Salvar.
+- Bloquear / liberar.
+- Excluir aparelho com confirmação.
+- Exclusão funciona com o Worker atual usando bloqueio + marcador interno.

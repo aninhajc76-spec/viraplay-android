@@ -12,8 +12,8 @@ android {
         applicationId = "com.viraplay.admin"
         minSdk = 23
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 11
+        versionName = "1.1.0"
     }
 
     buildFeatures {

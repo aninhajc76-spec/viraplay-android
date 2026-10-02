@@ -33,24 +33,48 @@ class PlayerRepository {
         deviceId: String,
         secret: String
     ): DeviceConfig {
-        val device = URLEncoder.encode(deviceId, "UTF-8")
-        val deviceSecret = URLEncoder.encode(secret, "UTF-8")
+        val encodedId =
+            URLEncoder.encode(
+                deviceId,
+                "UTF-8"
+            )
+
+        val encodedSecret =
+            URLEncoder.encode(
+                secret,
+                "UTF-8"
+            )
 
         val url =
-            "${AppConfig.SERVER_BASE_URL}/api/config" +
-                "?device_id=$device" +
-                "&secret=$deviceSecret"
+            "${AppConfig.SERVER_BASE_URL}" +
+                "/api/config" +
+                "?device_id=$encodedId" +
+                "&secret=$encodedSecret"
 
-        return Http.parseDeviceConfig(Http.getText(url))
+        return Http.parseDeviceConfig(
+            Http.getText(url)
+        )
     }
 
-    fun playlist(url: String): ParsedPlaylist {
-        val text = Http.getText(url)
+    fun playlist(
+        url: String
+    ): ParsedPlaylist =
+        Http.withReader(url) { reader ->
 
-        if (!text.trimStart().startsWith("#EXTM3U", ignoreCase = true)) {
-            throw IllegalStateException("A URL não retornou uma lista M3U válida")
+            val parsed =
+                M3uParser.parse(
+                    reader.lineSequence()
+                )
+
+            if (
+                parsed.channels
+                    .isEmpty()
+            ) {
+                throw IllegalStateException(
+                    "A lista não contém canais ou conteúdos"
+                )
+            }
+
+            parsed
         }
-
-        return M3uParser.parse(text)
-    }
 }

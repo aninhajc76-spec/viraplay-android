@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -22,13 +23,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.viraplay.shared.ChannelItem
@@ -41,9 +46,11 @@ import kotlinx.coroutines.withContext
 
 private val Bg = Color(0xFF020711)
 private val Panel = Color(0xFF07162C)
+private val Panel2 = Color(0xFF0A2040)
 private val Cyan = Color(0xFF00C8FF)
 private val Purple = Color(0xFF8B3DFF)
 private val Green = Color(0xFF4BE38A)
+private val Danger = Color(0xFFFF5D73)
 
 private enum class HomeSection(val label: String) {
     LIVE("Ao vivo"),
@@ -55,81 +62,205 @@ private enum class HomeSection(val label: String) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            ViraPlayApp()
-        }
+        setContent { ViraPlayApp() }
     }
 }
+
+private data class RefreshResult(
+    val enabled: Boolean,
+    val playlistUrl: String?,
+    val playlist: ParsedPlaylist?,
+    val status: String
+)
 
 @Composable
 fun ViraPlayApp() {
     val context = LocalContext.current
-
     val uiMode =
-        context.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+        context.getSystemService(
+            Context.UI_MODE_SERVICE
+        ) as UiModeManager
 
     val isTv =
-        uiMode.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        uiMode.currentModeType ==
+            Configuration.UI_MODE_TYPE_TELEVISION
 
-    val identity = remember { DeviceIdentity(context) }
-    val repo = remember { PlayerRepository() }
-    val scope = rememberCoroutineScope()
+    val identity =
+        remember {
+            DeviceIdentity(context)
+        }
 
-    var status by remember { mutableStateOf("Conectando...") }
-    var parsed by remember { mutableStateOf<ParsedPlaylist?>(null) }
-    var enabled by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf<ChannelItem?>(null) }
+    val repo =
+        remember {
+            PlayerRepository()
+        }
 
-    suspend fun refresh() = withContext(Dispatchers.IO) {
+    val scope =
+        rememberCoroutineScope()
+
+    var status by remember {
+        mutableStateOf("Conectando...")
+    }
+
+    var enabled by remember {
+        mutableStateOf(false)
+    }
+
+    var parsed by remember {
+        mutableStateOf<ParsedPlaylist?>(null)
+    }
+
+    var playlistUrl by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var selected by remember {
+        mutableStateOf<ChannelItem?>(null)
+    }
+
+    var loading by remember {
+        mutableStateOf(false)
+    }
+
+    suspend fun refresh(
+        forcePlaylist: Boolean = false
+    ) {
+        if (loading) return
+
+        loading = true
+        status = "Conectando..."
+
         try {
-            status = "Conectando..."
+            val currentParsed = parsed
+            val currentUrl = playlistUrl
 
-            repo.register(
-                identity.deviceId,
-                identity.deviceSecret,
-                identity.pairingCode,
-                if (isTv) "ANDROID_TV" else "ANDROID_MOBILE"
-            )
+            val result =
+                withContext(
+                    Dispatchers.IO
+                ) {
+                    repo.register(
+                        identity.deviceId,
+                        identity.deviceSecret,
+                        identity.pairingCode,
+                        if (isTv) {
+                            "ANDROID_TV"
+                        } else {
+                            "ANDROID_MOBILE"
+                        }
+                    )
 
-            val cfg = repo.config(identity.deviceId, identity.deviceSecret)
-            enabled = cfg.enabled
+                    val cfg =
+                        repo.config(
+                            identity.deviceId,
+                            identity.deviceSecret
+                        )
 
-            val playlistUrl = cfg.playlistUrl
+                    if (!cfg.enabled) {
+                        RefreshResult(
+                            enabled = false,
+                            playlistUrl =
+                                cfg.playlistUrl,
+                            playlist = null,
+                            status =
+                                "Dispositivo aguardando liberação"
+                        )
+                    } else if (
+                        cfg.playlistUrl
+                            .isNullOrBlank()
+                    ) {
+                        RefreshResult(
+                            enabled = true,
+                            playlistUrl = null,
+                            playlist = null,
+                            status =
+                                "Ativado. Aguardando lista."
+                        )
+                    } else {
+                        val shouldReload =
+                            forcePlaylist ||
+                                currentParsed == null ||
+                                cfg.playlistUrl !=
+                                    currentUrl
 
-            if (cfg.enabled && !playlistUrl.isNullOrBlank()) {
-                status = "Baixando lista..."
+                        if (shouldReload) {
+                            val p =
+                                repo.playlist(
+                                    cfg.playlistUrl
+                                )
 
-                val result = repo.playlist(playlistUrl)
-
-                if (result.channels.isEmpty()) {
-                    throw IllegalStateException("Lista vazia")
+                            RefreshResult(
+                                enabled = true,
+                                playlistUrl =
+                                    cfg.playlistUrl,
+                                playlist = p,
+                                status =
+                                    "${p.channels.size} itens carregados"
+                            )
+                        } else {
+                            RefreshResult(
+                                enabled = true,
+                                playlistUrl =
+                                    cfg.playlistUrl,
+                                playlist =
+                                    currentParsed,
+                                status =
+                                    "${currentParsed.channels.size} itens carregados"
+                            )
+                        }
+                    }
                 }
 
-                parsed = result
-                status = "${result.channels.size} itens carregados"
-            } else {
-                status =
-                    if (cfg.enabled) {
-                        "Aguardando lista"
-                    } else {
-                        "Aguardando ativação"
-                    }
-            }
-        } catch (e: Exception) {
+            enabled =
+                result.enabled
+
+            playlistUrl =
+                result.playlistUrl
+
+            parsed =
+                result.playlist
+
             status =
-                e.message
-                    ?.take(90)
-                    ?.takeIf { it.isNotBlank() }
-                    ?: "Falha de conexão"
+                result.status
+
+            if (!enabled) {
+                selected = null
+            }
+
+        } catch (e: Throwable) {
+            status =
+                when (e) {
+                    is OutOfMemoryError ->
+                        "Lista muito grande para a memória deste aparelho"
+
+                    else ->
+                        "Falha: " +
+                            (e.message
+                                ?: "não foi possível carregar")
+                                .replace("\n", " ")
+                                .take(90)
+                }
+        } finally {
+            loading = false
         }
     }
 
     LaunchedEffect(Unit) {
-        while (parsed == null) {
-            refresh()
-            if (parsed == null) {
-                delay(8_000)
-            }
+        refresh(
+            forcePlaylist = true
+        )
+
+        while (true) {
+            delay(
+                if (parsed == null) {
+                    10_000
+                } else {
+                    30_000
+                }
+            )
+
+            refresh(
+                forcePlaylist = false
+            )
         }
     }
 
@@ -143,31 +274,60 @@ fun ViraPlayApp() {
             )
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier.fillMaxSize(),
             color = Bg
         ) {
             when {
                 selected != null -> {
                     VideoScreen(
-                        channel = selected!!,
-                        onBack = { selected = null }
+                        channel =
+                            selected!!,
+                        onBack = {
+                            selected = null
+                        }
                     )
                 }
 
-                parsed != null && enabled -> {
+                parsed != null &&
+                    enabled -> {
                     HomeScreen(
-                        playlist = parsed!!,
-                        isTv = isTv,
-                        onPlay = { selected = it }
+                        playlist =
+                            parsed!!,
+                        isTv =
+                            isTv,
+                        status =
+                            status,
+                        onReload = {
+                            scope.launch {
+                                refresh(
+                                    forcePlaylist =
+                                        true
+                                )
+                            }
+                        },
+                        onPlay = {
+                            selected = it
+                        }
                     )
                 }
 
                 else -> {
                     ActivationScreen(
-                        code = identity.pairingCode,
-                        status = status,
+                        code =
+                            identity
+                                .pairingCode,
+                        status =
+                            status,
+                        loading =
+                            loading,
                         onRefresh = {
-                            scope.launch { refresh() }
+                            scope.launch {
+                                refresh(
+                                    forcePlaylist =
+                                        true
+                                )
+                            }
                         }
                     )
                 }
@@ -180,61 +340,173 @@ fun ViraPlayApp() {
 private fun ActivationScreen(
     code: String,
     status: String,
+    loading: Boolean,
     onRefresh: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(28.dp),
+        horizontalAlignment =
+            Alignment.CenterHorizontally,
+        verticalArrangement =
+            Arrangement.Center
     ) {
+        Image(
+            painter =
+                painterResource(
+                    R.drawable.viraplay_logo
+                ),
+            contentDescription =
+                "ViraPlay",
+            modifier =
+                Modifier.size(118.dp),
+            contentScale =
+                ContentScale.Fit
+        )
+
+        Spacer(
+            Modifier.height(8.dp)
+        )
+
         Text(
-            text = "ViraPlay",
+            "ViraPlay",
             color = Color.White,
-            fontSize = 42.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 40.sp,
+            fontWeight =
+                FontWeight.SemiBold
         )
 
-        Spacer(Modifier.height(8.dp))
-
         Text(
-            text = "Ative seu dispositivo",
+            "ENTRETENIMENTO SEM LIMITES",
             color = Cyan,
-            fontSize = 24.sp
+            fontSize = 11.sp,
+            letterSpacing = 2.sp
         )
 
-        Spacer(Modifier.height(26.dp))
+        Spacer(
+            Modifier.height(24.dp)
+        )
 
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = Panel
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor =
+                        Panel
+                ),
+            shape =
+                RoundedCornerShape(
+                    22.dp
+                ),
+            modifier =
+                Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = code,
-                modifier = Modifier.padding(horizontal = 34.dp, vertical = 20.dp),
-                color = Color.White,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+            Column(
+                modifier =
+                    Modifier.padding(22.dp),
+                horizontalAlignment =
+                    Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Ative seu dispositivo",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight =
+                        FontWeight.Medium
+                )
 
-        Spacer(Modifier.height(18.dp))
+                Text(
+                    "Informe este código ao atendimento ViraPlay",
+                    color = Color.Gray,
+                    fontSize = 13.sp
+                )
 
-        Text(
-            text = "Envie este código para o atendimento ViraPlay.",
-            color = Color.LightGray
-        )
+                Spacer(
+                    Modifier.height(18.dp)
+                )
 
-        Text(
-            text = status,
-            color = Cyan,
-            modifier = Modifier.padding(top = 10.dp)
-        )
+                Surface(
+                    shape =
+                        RoundedCornerShape(
+                            18.dp
+                        ),
+                    color = Panel2
+                ) {
+                    Text(
+                        code,
+                        modifier =
+                            Modifier.padding(
+                                horizontal =
+                                    30.dp,
+                                vertical =
+                                    18.dp
+                            ),
+                        color =
+                            Color.White,
+                        fontSize =
+                            34.sp,
+                        fontWeight =
+                            FontWeight.Bold,
+                        letterSpacing =
+                            3.sp
+                    )
+                }
 
-        Button(
-            onClick = onRefresh,
-            modifier = Modifier.padding(top = 20.dp)
-        ) {
-            Text("Atualizar")
+                Spacer(
+                    Modifier.height(16.dp)
+                )
+
+                if (loading) {
+                    LinearProgressIndicator(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(),
+                        color = Cyan
+                    )
+                }
+
+                Text(
+                    status,
+                    color =
+                        if (
+                            status.startsWith(
+                                "Falha"
+                            )
+                        ) {
+                            Danger
+                        } else {
+                            Color.LightGray
+                        },
+                    modifier =
+                        Modifier.padding(
+                            top = 12.dp
+                        ),
+                    fontSize =
+                        13.sp
+                )
+
+                Button(
+                    onClick =
+                        onRefresh,
+                    enabled =
+                        !loading,
+                    modifier =
+                        Modifier
+                            .padding(
+                                top = 16.dp
+                            )
+                            .fillMaxWidth()
+                ) {
+                    Text(
+                        if (loading) {
+                            "Carregando..."
+                        } else {
+                            "Atualizar agora"
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -243,43 +515,87 @@ private fun ActivationScreen(
 private fun HomeScreen(
     playlist: ParsedPlaylist,
     isTv: Boolean,
+    status: String,
+    onReload: () -> Unit,
     onPlay: (ChannelItem) -> Unit
 ) {
-    val context = LocalContext.current
+    val context =
+        LocalContext.current
 
-    var favoriteUrls by remember {
-        mutableStateOf(loadFavorites(context))
+    var favorites by remember {
+        mutableStateOf(
+            loadFavorites(
+                context
+            )
+        )
     }
 
-    var section by remember { mutableStateOf(HomeSection.LIVE) }
-    var search by remember { mutableStateOf("") }
-    var group by remember { mutableStateOf("Todos") }
+    var section by remember {
+        mutableStateOf(
+            HomeSection.LIVE
+        )
+    }
+
+    var search by remember {
+        mutableStateOf("")
+    }
 
     val sectionItems =
-        remember(section, playlist, favoriteUrls) {
+        remember(
+            section,
+            playlist,
+            favorites
+        ) {
             when (section) {
                 HomeSection.LIVE ->
-                    playlist.channels.filter { it.type == ContentType.LIVE }
+                    playlist.channels
+                        .filter {
+                            it.type ==
+                                ContentType.LIVE
+                        }
 
                 HomeSection.MOVIES ->
-                    playlist.channels.filter { it.type == ContentType.MOVIE }
+                    playlist.channels
+                        .filter {
+                            it.type ==
+                                ContentType.MOVIE
+                        }
 
                 HomeSection.SERIES ->
-                    playlist.channels.filter { it.type == ContentType.SERIES }
+                    playlist.channels
+                        .filter {
+                            it.type ==
+                                ContentType.SERIES
+                        }
 
                 HomeSection.FAVORITES ->
-                    playlist.channels.filter { favoriteUrls.contains(it.url) }
+                    playlist.channels
+                        .filter {
+                            favorites
+                                .contains(
+                                    it.url
+                                )
+                        }
             }
         }
 
     val searched =
-        remember(sectionItems, search) {
+        remember(
+            sectionItems,
+            search
+        ) {
             if (search.isBlank()) {
                 sectionItems
             } else {
                 sectionItems.filter {
-                    it.name.contains(search, ignoreCase = true) ||
-                        it.group.contains(search, ignoreCase = true)
+                    it.name.contains(
+                        search,
+                        true
+                    ) ||
+                        it.group.contains(
+                            search,
+                            true
+                        )
                 }
             }
         }
@@ -289,19 +605,32 @@ private fun HomeScreen(
             listOf("Todos") +
                 searched
                     .map { it.group }
-                    .filter { it.isNotBlank() }
+                    .filter {
+                        it.isNotBlank()
+                    }
                     .distinct()
                     .sorted()
         }
 
-    val activeGroup = if (groups.contains(group)) group else "Todos"
+    var group by remember(section) {
+        mutableStateOf("Todos")
+    }
+
+    if (group !in groups) {
+        group = "Todos"
+    }
 
     val visible =
-        remember(searched, activeGroup) {
-            if (activeGroup == "Todos") {
+        remember(
+            searched,
+            group
+        ) {
+            if (group == "Todos") {
                 searched
             } else {
-                searched.filter { it.group == activeGroup }
+                searched.filter {
+                    it.group == group
+                }
             }
         }
 
@@ -309,113 +638,237 @@ private fun HomeScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(if (isTv) 24.dp else 12.dp)
+                .padding(
+                    if (isTv) {
+                        24.dp
+                    } else {
+                        12.dp
+                    }
+                )
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Vira",
-                color = Color.White,
-                fontSize = if (isTv) 34.sp else 28.sp,
-                fontWeight = FontWeight.SemiBold
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+            Image(
+                painter =
+                    painterResource(
+                        R.drawable
+                            .viraplay_logo
+                    ),
+                contentDescription =
+                    null,
+                modifier =
+                    Modifier.size(
+                        if (isTv) {
+                            58.dp
+                        } else {
+                            44.dp
+                        }
+                    )
             )
 
-            Text(
-                text = "Play",
-                color = Cyan,
-                fontSize = if (isTv) 34.sp else 28.sp,
-                fontWeight = FontWeight.SemiBold
+            Spacer(
+                Modifier.width(
+                    10.dp
+                )
             )
 
-            Spacer(Modifier.weight(1f))
+            Column {
+                Row {
+                    Text(
+                        "Vira",
+                        color =
+                            Color.White,
+                        fontSize =
+                            if (isTv) {
+                                32.sp
+                            } else {
+                                25.sp
+                            },
+                        fontWeight =
+                            FontWeight.Bold
+                    )
 
-            Text(
-                text = "${playlist.channels.size} itens",
-                color = Color.Gray,
-                fontSize = 12.sp
+                    Text(
+                        "Play",
+                        color = Cyan,
+                        fontSize =
+                            if (isTv) {
+                                32.sp
+                            } else {
+                                25.sp
+                            },
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    status,
+                    color =
+                        Color.Gray,
+                    fontSize =
+                        11.sp
+                )
+            }
+
+            Spacer(
+                Modifier.weight(1f)
             )
+
+            TextButton(
+                onClick =
+                    onReload
+            ) {
+                Text("Atualizar")
+            }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(
+            Modifier.height(8.dp)
+        )
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(HomeSection.entries) { item ->
+        LazyRow(
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    8.dp
+                )
+        ) {
+            items(
+                HomeSection.entries
+            ) { item ->
                 FilterChip(
-                    selected = item == section,
+                    selected =
+                        section == item,
                     onClick = {
                         section = item
                         group = "Todos"
                         search = ""
                     },
-                    label = { Text(item.label) }
+                    label = {
+                        Text(item.label)
+                    }
                 )
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(
+            Modifier.height(8.dp)
+        )
 
         OutlinedTextField(
             value = search,
-            onValueChange = { search = it },
-            modifier = Modifier.fillMaxWidth(),
+            onValueChange = {
+                search = it
+            },
+            modifier =
+                Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Buscar") }
+            label = {
+                Text(
+                    "Buscar conteúdo"
+                )
+            }
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(
+            Modifier.height(8.dp)
+        )
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(groups) { item ->
+        LazyRow(
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    8.dp
+                )
+        ) {
+            items(groups) { g ->
                 FilterChip(
-                    selected = item == activeGroup,
-                    onClick = { group = item },
-                    label = { Text(item, maxLines = 1) }
+                    selected =
+                        group == g,
+                    onClick = {
+                        group = g
+                    },
+                    label = {
+                        Text(
+                            g,
+                            maxLines = 1,
+                            overflow =
+                                TextOverflow.Ellipsis
+                        )
+                    }
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(
+            Modifier.height(10.dp)
+        )
 
         if (visible.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier.fillMaxSize(),
+                contentAlignment =
+                    Alignment.Center
             ) {
                 Text(
-                    text =
-                        if (section == HomeSection.FAVORITES) {
-                            "Nenhum favorito ainda"
-                        } else {
-                            "Nenhum conteúdo encontrado"
-                        },
+                    if (
+                        section ==
+                        HomeSection.FAVORITES
+                    ) {
+                        "Nenhum favorito ainda"
+                    } else {
+                        "Nenhum conteúdo encontrado"
+                    },
                     color = Color.Gray
                 )
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(if (isTv) 5 else 2),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxSize()
+                columns =
+                    GridCells.Fixed(
+                        if (isTv) 5 else 2
+                    ),
+                horizontalArrangement =
+                    Arrangement.spacedBy(
+                        10.dp
+                    ),
+                verticalArrangement =
+                    Arrangement.spacedBy(
+                        10.dp
+                    ),
+                modifier =
+                    Modifier.fillMaxSize()
             ) {
                 items(
                     visible,
-                    key = { it.name + it.url }
+                    key = {
+                        it.name +
+                            it.url
+                    }
                 ) { item ->
-                    val favorite = favoriteUrls.contains(item.url)
-
                     ChannelCard(
-                        channel = item,
-                        isTv = isTv,
-                        favorite = favorite,
+                        channel =
+                            item,
+                        isTv =
+                            isTv,
+                        favorite =
+                            favorites
+                                .contains(
+                                    item.url
+                                ),
                         onFavorite = {
-                            favoriteUrls =
+                            favorites =
                                 toggleFavorite(
-                                    context = context,
-                                    current = favoriteUrls,
-                                    url = item.url
+                                    context,
+                                    favorites,
+                                    item.url
                                 )
                         },
-                        onClick = { onPlay(item) }
+                        onClick = {
+                            onPlay(item)
+                        }
                     )
                 }
             }
@@ -431,66 +884,125 @@ private fun ChannelCard(
     onFavorite: () -> Unit,
     onClick: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = Panel,
+    Card(
+        colors =
+            CardDefaults
+                .cardColors(
+                    containerColor =
+                        Panel
+                ),
+        shape =
+            RoundedCornerShape(
+                16.dp
+            ),
         modifier =
             Modifier
-                .height(if (isTv) 128.dp else 120.dp)
+                .height(
+                    if (isTv) {
+                        132.dp
+                    } else {
+                        124.dp
+                    }
+                )
                 .fillMaxWidth()
                 .focusable()
-                .clickable(onClick = onClick)
+                .clickable(
+                    onClick =
+                        onClick
+                )
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+            verticalArrangement =
+                Arrangement
+                    .SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.Top) {
+            Row {
                 Text(
-                    text = channel.name,
-                    color = Color.White,
+                    channel.name,
+                    color =
+                        Color.White,
+                    fontSize =
+                        if (isTv) {
+                            17.sp
+                        } else {
+                            15.sp
+                        },
+                    fontWeight =
+                        FontWeight.Medium,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                    fontSize = if (isTv) 17.sp else 15.sp,
-                    fontWeight = FontWeight.Medium
+                    overflow =
+                        TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier.weight(1f)
                 )
 
                 Text(
-                    text = if (favorite) "★" else "☆",
-                    color = if (favorite) Cyan else Color.Gray,
-                    fontSize = 24.sp,
+                    if (favorite) {
+                        "★"
+                    } else {
+                        "☆"
+                    },
+                    color =
+                        if (favorite) {
+                            Cyan
+                        } else {
+                            Color.Gray
+                        },
+                    fontSize = 23.sp,
                     modifier =
                         Modifier
-                            .padding(start = 6.dp)
-                            .clickable { onFavorite() }
+                            .padding(
+                                start = 6.dp
+                            )
+                            .clickable {
+                                onFavorite()
+                            }
                 )
             }
 
             Column {
                 Text(
-                    text =
-                        when (channel.type) {
-                            ContentType.LIVE -> "AO VIVO"
-                            ContentType.MOVIE -> "FILME"
-                            ContentType.SERIES -> "SÉRIE"
-                        },
+                    when (
+                        channel.type
+                    ) {
+                        ContentType.LIVE ->
+                            "AO VIVO"
+
+                        ContentType.MOVIE ->
+                            "FILME"
+
+                        ContentType.SERIES ->
+                            "SÉRIE"
+                    },
                     color =
-                        when (channel.type) {
-                            ContentType.LIVE -> Green
-                            ContentType.MOVIE -> Cyan
-                            ContentType.SERIES -> Purple
+                        when (
+                            channel.type
+                        ) {
+                            ContentType.LIVE ->
+                                Green
+
+                            ContentType.MOVIE ->
+                                Cyan
+
+                            ContentType.SERIES ->
+                                Purple
                         },
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight =
+                        FontWeight.Bold
                 )
 
                 Text(
-                    text = channel.group,
+                    channel.group,
                     color = Color.Gray,
+                    fontSize = 11.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontSize = 11.sp
+                    overflow =
+                        TextOverflow.Ellipsis
                 )
             }
         }
@@ -502,76 +1014,175 @@ private fun VideoScreen(
     channel: ChannelItem,
     onBack: () -> Unit
 ) {
-    BackHandler { onBack() }
+    BackHandler {
+        onBack()
+    }
 
-    val context = LocalContext.current
+    val context =
+        LocalContext.current
+
+    var error by
+        remember(channel.url) {
+            mutableStateOf<String?>(
+                null
+            )
+        }
 
     val player =
         remember(channel.url) {
-            ExoPlayer.Builder(context)
+            ExoPlayer
+                .Builder(context)
                 .build()
                 .apply {
-                    setMediaItem(MediaItem.fromUri(channel.url))
+                    addListener(
+                        object :
+                            Player.Listener {
+                            override fun onPlayerError(
+                                playbackException:
+                                    PlaybackException
+                            ) {
+                                error =
+                                    playbackException
+                                        .message
+                                        ?.take(100)
+                                        ?: "Falha ao reproduzir"
+                            }
+                        }
+                    )
+
+                    setMediaItem(
+                        MediaItem
+                            .fromUri(
+                                channel.url
+                            )
+                    )
+
                     prepare()
                     playWhenReady = true
                 }
         }
 
     DisposableEffect(player) {
-        onDispose { player.release() }
+        onDispose {
+            player.release()
+        }
     }
 
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Color.Black
+                )
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    useController = true
-                }
+                PlayerView(ctx)
+                    .apply {
+                        this.player =
+                            player
+                        useController =
+                            true
+                    }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier =
+                Modifier.fillMaxSize()
         )
 
-        Surface(
-            color = Color.Black.copy(alpha = 0.55f),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+        Row(
+            modifier =
+                Modifier
+                    .align(
+                        Alignment.TopStart
+                    )
+                    .padding(12.dp),
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(8.dp)
+            Button(
+                onClick =
+                    onBack
             ) {
-                Button(onClick = onBack) {
-                    Text("Voltar")
+                Text("Voltar")
+            }
+
+            Spacer(
+                Modifier.width(10.dp)
+            )
+
+            Text(
+                channel.name,
+                color = Color.White,
+                maxLines = 1,
+                overflow =
+                    TextOverflow.Ellipsis
+            )
+        }
+
+        error?.let {
+            Card(
+                colors =
+                    CardDefaults
+                        .cardColors(
+                            containerColor =
+                                Color.Black
+                                    .copy(
+                                        alpha =
+                                            0.82f
+                                    )
+                        ),
+                modifier =
+                    Modifier
+                        .align(
+                            Alignment.Center
+                        )
+                        .padding(24.dp)
+            ) {
+                Column(
+                    modifier =
+                        Modifier.padding(18.dp),
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Não foi possível reproduzir",
+                        color = Danger,
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+
+                    Text(
+                        it,
+                        color =
+                            Color.LightGray,
+                        fontSize =
+                            12.sp,
+                        modifier =
+                            Modifier.padding(
+                                top = 8.dp
+                            )
+                    )
                 }
-
-                Spacer(Modifier.width(10.dp))
-
-                Text(
-                    text = channel.name,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
 }
 
-private fun loadFavorites(context: Context): Set<String> {
-    val prefs =
-        context.getSharedPreferences(
+private fun loadFavorites(
+    context: Context
+): Set<String> =
+    context
+        .getSharedPreferences(
             "viraplay_favorites",
             Context.MODE_PRIVATE
         )
-
-    return prefs
-        .getStringSet("urls", emptySet())
+        .getStringSet(
+            "urls",
+            emptySet()
+        )
         ?.toSet()
         ?: emptySet()
-}
 
 private fun toggleFavorite(
     context: Context,
@@ -582,10 +1193,8 @@ private fun toggleFavorite(
         current
             .toMutableSet()
             .apply {
-                if (contains(url)) {
+                if (!add(url)) {
                     remove(url)
-                } else {
-                    add(url)
                 }
             }
             .toSet()
@@ -596,7 +1205,10 @@ private fun toggleFavorite(
             Context.MODE_PRIVATE
         )
         .edit()
-        .putStringSet("urls", updated)
+        .putStringSet(
+            "urls",
+            updated
+        )
         .apply()
 
     return updated
