@@ -1,0 +1,43 @@
+VIRAPLAY 3.3 BETA - TV PERFORMANCE + BASE DE ATUALIZAÇÕES
+
+OBJETIVO DESTA VERSÃO
+- preservar o aplicativo de celular, que já está fluido;
+- corrigir a experiência na Android TV;
+- reduzir recarregamentos e contadores zerados;
+- tornar foco/controle remoto previsíveis;
+- preparar atualização por cima da versão instalada para o futuro.
+
+MELHORIAS DA TV
+1. Splash ViraPlay ao abrir o aplicativo (remove a tela cinza inicial).
+2. Contadores da Home usam o banco local salvo e aparecem imediatamente.
+3. Ao voltar do player ao vivo, o catálogo não é invalidado/recarregado.
+4. Filmes/Séries carregam menos itens inicialmente para deixar a navegação leve.
+5. TV ao vivo carrega lista paginada e não tenta preparar milhares de canais de uma vez.
+6. Preview ao vivo usa um único ExoPlayer e só inicia depois de o foco parar no canal.
+7. EPG tem cache e só consulta depois de o foco estabilizar.
+8. Qualidades de um canal só são consultadas após o foco estabilizar.
+9. Favorito dentro de cards não cria um foco extra no controle remoto.
+10. Item sob o controle fica com borda ciano forte; canal selecionado fica marcado em verde.
+11. Controles do player reaparecem com a primeira tecla/OK quando estiverem ocultos.
+12. A primeira seta depois dos controles sumirem apenas reabre os controles, evitando troca acidental.
+
+ATUALIZAÇÃO FUTURA
+O cliente agora possui a base de um atualizador interno. Ele consulta:
+https://raw.githubusercontent.com/aninhajc76-spec/viraplay-android/main/update/latest.json
+
+Quando uma futura versão assinada for publicada neste manifesto, o app mostra:
+"Atualização ViraPlay disponível" -> Baixar -> tela oficial de instalação do Android.
+
+IMPORTANTE SOBRE ASSINATURA
+A versão 3.3 deverá ser a primeira versão instalada com a ASSINATURA FIXA ViraPlay.
+Como as versões anteriores foram compiladas com chaves DEBUG descartáveis do GitHub,
+é esperado precisar DESINSTALAR a versão antiga UMA ÚLTIMA VEZ para instalar a 3.3 assinada.
+
+DEPOIS DA 3.3 ASSINADA:
+- 3.4, 3.5, 4.0 etc. podem instalar por cima;
+- o código do aparelho e dados locais permanecem;
+- não será necessário desinstalar/reinstalar em cada atualização;
+- o cliente poderá receber o aviso dentro do próprio ViraPlay.
+
+NÃO SUBA A CHAVE DE ASSINATURA PARA O REPOSITÓRIO PÚBLICO.
+Ela será configurada como GitHub Secret.

@@ -1,10 +1,12 @@
 package com.viraplay.player
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -14,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -42,17 +46,12 @@ fun BrandWordmark(
         else -> 50.dp
     }
 
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.foundation.Image(
             painter = painterResource(R.drawable.viraplay_wordmark),
             contentDescription = "ViraPlay",
             contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .width(logoWidth)
-                .height(logoHeight)
+            modifier = Modifier.width(logoWidth).height(logoHeight)
         )
 
         if (showBeta) {
@@ -83,16 +82,25 @@ fun FocusTile(
     content: @Composable ColumnScope.() -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.025f else 1f,
+        animationSpec = tween(110),
+        label = "vp_focus_scale"
+    )
+
     Surface(
         color = if (focused) VpPanelAlt else VpPanel,
         border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) VpCyan else VpBorder),
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocused?.invoke()
             }
-            .focusable()
             .clickable(onClick = onClick)
     ) {
         Column(content = content)
@@ -108,14 +116,23 @@ fun PosterCard(
     onFavorite: (() -> Unit)? = null
 ) {
     var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.018f else 1f,
+        animationSpec = tween(100),
+        label = "poster_focus_scale"
+    )
+
     Column(
         modifier = Modifier
             .width(width)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocused?.invoke()
             }
-            .focusable()
             .clickable(onClick = onClick)
     ) {
         Box(
@@ -142,12 +159,18 @@ fun PosterCard(
 
             if (item.favorite || onFavorite != null) {
                 Surface(
-                    color = Color.Black.copy(alpha = 0.72f),
+                    color = Color.Black.copy(alpha = 0.74f),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
-                        .then(if (onFavorite != null) Modifier.clickable { onFavorite?.invoke() } else Modifier)
+                        .then(
+                            if (onFavorite != null) {
+                                Modifier.pointerInput(item.itemKey, item.favorite) {
+                                    detectTapGestures(onTap = { onFavorite() })
+                                }
+                            } else Modifier
+                        )
                 ) {
                     Text(
                         if (item.favorite) "FAV" else "+FAV",
@@ -201,18 +224,42 @@ fun LiveRow(
     onFocused: () -> Unit = {}
 ) {
     var focused by remember { mutableStateOf(false) }
-    val highlight = selected || focused
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.012f else 1f,
+        animationSpec = tween(85),
+        label = "live_row_focus"
+    )
+
+    val container = when {
+        focused -> VpPanelAlt
+        selected -> VpGreen.copy(alpha = 0.10f)
+        else -> VpPanel
+    }
+    val borderColor = when {
+        focused -> VpCyan
+        selected -> VpGreen
+        else -> VpBorder
+    }
+    val borderWidth = when {
+        focused -> 3.dp
+        selected -> 2.dp
+        else -> 1.dp
+    }
+
     Surface(
-        color = if (highlight) VpPanelAlt else VpPanel,
-        border = BorderStroke(if (highlight) 2.dp else 1.dp, if (highlight) VpCyan else VpBorder),
+        color = container,
+        border = BorderStroke(borderWidth, borderColor),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocused()
             }
-            .focusable()
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -248,8 +295,20 @@ fun LiveRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            TextButton(onClick = onFavorite) {
-                Text(if (item.favorite) "FAV" else "+FAV", color = if (item.favorite) VpCyan else VpMuted, fontSize = 10.sp)
+
+            Surface(
+                color = Color.Transparent,
+                modifier = Modifier.pointerInput(item.itemKey, item.favorite) {
+                    detectTapGestures(onTap = { onFavorite() })
+                }
+            ) {
+                Text(
+                    if (item.favorite) "FAV" else "+FAV",
+                    color = if (item.favorite) VpCyan else VpMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                )
             }
         }
     }

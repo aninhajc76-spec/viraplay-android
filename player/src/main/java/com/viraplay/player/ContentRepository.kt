@@ -17,6 +17,13 @@ class ContentRepository(
     private val xtream = XtreamSync()
     private val m3u = M3uSync()
 
+    private data class CachedEpg(
+        val storedAt: Long,
+        val items: List<EpgProgram>
+    )
+
+    private val epgCache = mutableMapOf<String, CachedEpg>()
+
     fun registerIfNeeded(identity: DeviceIdentity, platform: String, force: Boolean = false) {
         val now = System.currentTimeMillis()
         val last = prefs.getLong("last_register", 0L)
@@ -42,7 +49,6 @@ class ContentRepository(
             )
         )
     }
-
 
     fun accountInfo(playlistUrl: String): XtreamAccountInfo? =
         runCatching { XtreamAccountClient.fetchFromPlaylist(playlistUrl) }.getOrNull()
@@ -78,6 +84,25 @@ class ContentRepository(
     fun epg(item: CatalogItem): List<EpgProgram> {
         val sourceUrl = db.getMeta("playlist_url").orEmpty()
         val streamId = item.sourceId ?: return emptyList()
-        return xtream.shortEpg(sourceUrl, streamId)
+        val cacheKey = "$sourceUrl|$streamId"
+        val now = System.currentTimeMillis()
+
+        synchronized(epgCache) {
+            val cached = epgCache[cacheKey]
+            if (cached != null) {
+                val ttl = if (cached.items.isEmpty()) 90_000L else 5L * 60L * 1000L
+                if (now - cached.storedAt < ttl) return cached.items
+            }
+        }
+
+        val fresh = runCatching { xtream.shortEpg(sourceUrl, streamId) }.getOrDefault(emptyList())
+        synchronized(epgCache) {
+            epgCache[cacheKey] = CachedEpg(now, fresh)
+            if (epgCache.size > 120) {
+                val oldest = epgCache.minByOrNull { it.value.storedAt }?.key
+                if (oldest != null) epgCache.remove(oldest)
+            }
+        }
+        return fresh
     }
 }

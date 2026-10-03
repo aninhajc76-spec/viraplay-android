@@ -1,8 +1,10 @@
 package com.viraplay.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -19,31 +21,39 @@ fun LivePreviewPlayer(
     muted: Boolean = true
 ) {
     val context = LocalContext.current
-    var ready by remember(item.itemKey) { mutableStateOf(false) }
-
-    LaunchedEffect(item.itemKey) {
-        ready = false
-        delay(550)
-        ready = true
-    }
-
-    if (!ready || item.url.isNullOrBlank()) {
-        Box(modifier)
-        return
-    }
-
-    val player = remember(item.itemKey) {
+    val player = remember {
         ExoPlayer.Builder(context).build().apply {
             volume = if (muted) 0f else 1f
             repeatMode = Player.REPEAT_MODE_OFF
-            setMediaItem(MediaItem.fromUri(item.url!!))
-            prepare()
-            playWhenReady = true
         }
     }
+    var ready by remember { mutableStateOf(false) }
 
-    DisposableEffect(player) {
+    LaunchedEffect(item.itemKey, item.url) {
+        ready = false
+        player.playWhenReady = false
+        player.stop()
+        player.clearMediaItems()
+
+        val url = item.url
+        if (url.isNullOrBlank()) return@LaunchedEffect
+
+        // Debounce: ao navegar rápido pelo controle, não abre um stream novo para cada foco.
+        delay(850)
+
+        player.setMediaItem(MediaItem.fromUri(url))
+        player.prepare()
+        player.playWhenReady = true
+        ready = true
+    }
+
+    DisposableEffect(Unit) {
         onDispose { player.release() }
+    }
+
+    if (!ready) {
+        Box(modifier.background(Color.Black))
+        return
     }
 
     AndroidView(
@@ -53,9 +63,13 @@ fun LivePreviewPlayer(
                 useController = false
                 keepScreenOn = true
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
             }
         },
-        update = { it.player = player },
+        update = { view ->
+            view.player = player
+            view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+        },
         modifier = modifier
     )
 }

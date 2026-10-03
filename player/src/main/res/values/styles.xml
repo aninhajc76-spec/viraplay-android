@@ -2,8 +2,17 @@
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowFullscreen">false</item>
+        <item name="android:windowBackground">#010611</item>
         <item name="android:colorAccent">#11C8F5</item>
         <item name="android:navigationBarColor">#020711</item>
         <item name="android:statusBarColor">#020711</item>
+    </style>
+
+    <style name="AppTheme.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#010611</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/viraplay_app_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">#07172F</item>
+        <item name="windowSplashScreenAnimationDuration">650</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>

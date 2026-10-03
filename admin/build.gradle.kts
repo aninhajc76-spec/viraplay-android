@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 33
+val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.0"
+
 android {
     namespace = "com.viraplay.admin"
     compileSdk = 36
@@ -12,11 +15,36 @@ android {
         applicationId = "com.viraplay.admin"
         minSdk = 23
         targetSdk = 36
-        versionCode = 32
-        versionName = "3.2.0"
+        versionCode = vpVersionCode
+        versionName = vpVersionName
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    signingConfigs {
+        create("release") {
+            val signingPath = System.getenv("VIRAPLAY_KEYSTORE_PATH")
+            if (!signingPath.isNullOrBlank()) {
+                storeFile = file(signingPath)
+                storePassword = System.getenv("VIRAPLAY_STORE_PASSWORD")
+                keyAlias = System.getenv("VIRAPLAY_KEY_ALIAS")
+                keyPassword = System.getenv("VIRAPLAY_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            val signingPath = System.getenv("VIRAPLAY_KEYSTORE_PATH")
+            if (!signingPath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

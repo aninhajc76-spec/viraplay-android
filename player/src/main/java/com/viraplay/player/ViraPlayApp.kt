@@ -47,14 +47,17 @@ fun ViraPlayApp() {
     val repository = remember { ContentRepository(context, db) }
     val uiStore = remember { UiStateStore(context) }
     val preferences = remember { PlaybackPreferences(context) }
+    val updateManager = remember { UpdateManager(context) }
     val scope = rememberCoroutineScope()
 
+    // Na TV sempre abre na Home. No celular preserva a seção anterior.
     var section by remember {
         mutableStateOf(
-            runCatching { MainSection.valueOf(uiStore.section()) }
-                .getOrDefault(MainSection.HOME)
+            if (isTv) MainSection.HOME
+            else runCatching { MainSection.valueOf(uiStore.section()) }.getOrDefault(MainSection.HOME)
         )
     }
+
     var enabled by remember { mutableStateOf(uiStore.lastEnabled()) }
     var status by remember {
         mutableStateOf(if (db.hasCatalog()) "${db.countAll()} títulos disponíveis" else "Conectando...")
@@ -62,12 +65,17 @@ fun ViraPlayApp() {
     var accountInfo by remember { mutableStateOf<XtreamAccountInfo?>(null) }
     var syncing by remember { mutableStateOf(!db.hasCatalog()) }
     var catalogVersion by remember { mutableIntStateOf(0) }
+    var playbackVersion by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     var resumeItem by remember { mutableStateOf<CatalogItem?>(null) }
     var protectedItem by remember { mutableStateOf<CatalogItem?>(null) }
     var adultUnlocked by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+
+    var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateError by remember { mutableStateOf<String?>(null) }
 
     suspend fun refresh(forceCatalog: Boolean) {
         val hadCatalog = db.hasCatalog()
@@ -105,9 +113,16 @@ fun ViraPlayApp() {
             val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
 
             if (needsSync) {
-                status = if (hadCatalog) "Atualizando catálogo em segundo plano..." else "Preparando catálogo pela primeira vez..."
+                status = if (hadCatalog) {
+                    "${db.countAll()} títulos • atualizando em segundo plano..."
+                } else {
+                    "Preparando catálogo pela primeira vez..."
+                }
+
                 withContext(Dispatchers.IO) {
-                    repository.syncCatalog(remoteUrl) { progress -> scope.launch { status = progress } }
+                    repository.syncCatalog(remoteUrl) { progress ->
+                        if (!hadCatalog) scope.launch { status = progress }
+                    }
                 }
                 catalogVersion += 1
             }
@@ -115,7 +130,7 @@ fun ViraPlayApp() {
             status = buildHeaderStatus(db.countAll(), accountInfo)
         } catch (e: Throwable) {
             status = if (db.hasCatalog()) {
-                "Modo offline • catálogo salvo"
+                "${db.countAll()} títulos • modo offline"
             } else {
                 val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
                 "Falha: $message"
@@ -131,13 +146,17 @@ fun ViraPlayApp() {
             return
         }
         if (item.url.isNullOrBlank()) return
+
         if (item.type == ContentType.LIVE) {
             overlay = Overlay.Player(item, 0L)
             return
         }
 
         val (position, duration) = db.progress(item.itemKey)
-        val resumable = position > 30_000L && (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
+        val resumable =
+            position > 30_000L &&
+                (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
+
         if (resumable) {
             resumeItem = item.copy(progressMs = position, durationMs = duration)
         } else {
@@ -160,6 +179,13 @@ fun ViraPlayApp() {
         while (true) {
             delay(10L * 60L * 1000L)
             refresh(forceCatalog = false)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(2_500)
+        updateInfo = withContext(Dispatchers.IO) {
+            runCatching { updateManager.check() }.getOrNull()
         }
     }
 
@@ -188,6 +214,7 @@ fun ViraPlayApp() {
                     repository = repository,
                     section = section,
                     catalogVersion = catalogVersion,
+                    playbackVersion = playbackVersion,
                     status = status,
                     accessNotice = accessNotice,
                     adultUnlocked = adultAccess,
@@ -206,7 +233,7 @@ fun ViraPlayApp() {
                     db = db,
                     repository = repository,
                     section = section,
-                    catalogVersion = catalogVersion,
+                    catalogVersion = catalogVersion + playbackVersion,
                     status = status,
                     accessNotice = accessNotice,
                     adultUnlocked = adultAccess,
@@ -229,8 +256,8 @@ fun ViraPlayApp() {
                     isTv = isTv,
                     startPosition = current.startPosition,
                     onBack = {
+                        if (current.item.type != ContentType.LIVE) playbackVersion += 1
                         overlay = null
-                        catalogVersion += 1
                     }
                 )
 
@@ -241,7 +268,7 @@ fun ViraPlayApp() {
                     isTv = isTv,
                     onBack = { overlay = null },
                     onPlay = ::openItem,
-                    onChanged = { catalogVersion += 1 }
+                    onChanged = { playbackVersion += 1 }
                 )
 
                 Overlay.Support -> SupportScreen(
@@ -292,11 +319,16 @@ fun ViraPlayApp() {
                     title = { Text(if (creating) "Criar PIN parental" else "Conteúdo protegido") },
                     text = {
                         Column {
-                            Text(if (creating) "Crie um PIN de 4 números para proteger conteúdo adulto." else "Digite seu PIN de 4 números para continuar.")
+                            Text(
+                                if (creating) "Crie um PIN de 4 números para proteger conteúdo adulto."
+                                else "Digite seu PIN de 4 números para continuar."
+                            )
                             Spacer(Modifier.height(10.dp))
                             OutlinedTextField(
                                 value = pinInput,
-                                onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pinInput = it },
+                                onValueChange = {
+                                    if (it.length <= 4 && it.all(Char::isDigit)) pinInput = it
+                                },
                                 label = { Text("PIN") },
                                 visualTransformation = PasswordVisualTransformation(),
                                 singleLine = true
@@ -306,15 +338,81 @@ fun ViraPlayApp() {
                     },
                     confirmButton = {
                         Button(onClick = {
-                            val ok = if (creating) preferences.setPin(pinInput) else preferences.verifyPin(pinInput)
+                            val ok =
+                                if (creating) preferences.setPin(pinInput)
+                                else preferences.verifyPin(pinInput)
                             if (ok) {
                                 adultUnlocked = true
                                 protectedItem = null
                                 reallyOpen(item)
-                            } else pinError = "PIN inválido. Use 4 números."
+                            } else {
+                                pinError = "PIN inválido. Use 4 números."
+                            }
                         }) { Text(if (creating) "Criar e continuar" else "Desbloquear") }
                     },
-                    dismissButton = { TextButton(onClick = { protectedItem = null }) { Text("Cancelar") } }
+                    dismissButton = {
+                        TextButton(onClick = { protectedItem = null }) { Text("Cancelar") }
+                    }
+                )
+            }
+
+            updateInfo?.let { info ->
+                AlertDialog(
+                    onDismissRequest = {
+                        if (!info.mandatory && !updateBusy) updateInfo = null
+                    },
+                    title = { Text("Atualização ViraPlay ${info.versionName}") },
+                    text = {
+                        Column {
+                            Text(info.message)
+                            if (info.mandatory) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("Esta atualização é necessária.", color = VpCyan)
+                            }
+                            if (updateBusy) {
+                                Spacer(Modifier.height(14.dp))
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Text("Baixando atualização...", modifier = Modifier.padding(top = 8.dp))
+                            }
+                            updateError?.let {
+                                Spacer(Modifier.height(10.dp))
+                                Text(it, color = VpDanger)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            enabled = !updateBusy,
+                            onClick = {
+                                updateBusy = true
+                                updateError = null
+                                scope.launch {
+                                    val file = withContext(Dispatchers.IO) {
+                                        runCatching { updateManager.download(info) }
+                                    }
+                                    file.onSuccess { apk ->
+                                        updateBusy = false
+                                        when (updateManager.launchInstaller(apk)) {
+                                            InstallLaunchResult.STARTED -> updateInfo = null
+                                            InstallLaunchResult.NEED_PERMISSION ->
+                                                updateError = "Autorize a instalação e toque em Atualizar novamente."
+                                        }
+                                    }.onFailure { e ->
+                                        updateBusy = false
+                                        updateError = e.message ?: "Não foi possível baixar a atualização."
+                                    }
+                                }
+                            }
+                        ) { Text("Atualizar") }
+                    },
+                    dismissButton = {
+                        if (!info.mandatory) {
+                            TextButton(
+                                enabled = !updateBusy,
+                                onClick = { updateInfo = null }
+                            ) { Text("Depois") }
+                        }
+                    }
                 )
             }
         }
