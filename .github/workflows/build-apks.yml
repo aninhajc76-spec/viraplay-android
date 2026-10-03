@@ -2,9 +2,6 @@ name: Build ViraPlay APKs
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -27,32 +24,44 @@ jobs:
         shell: bash
         run: |
           set -e
-
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
           if [ ! -x "$SDKMANAGER" ]; then
             SDKMANAGER="$(command -v sdkmanager)"
           fi
-
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-          "$SDKMANAGER" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Configurar Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
-      - name: Compilar ViraPlay Cliente e ADM
-        run: gradle :player:assembleDebug :admin:assembleDebug --stacktrace
+      - name: Preparar assinatura fixa ViraPlay
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.VIRAPLAY_KEYSTORE_B64 }}
+        run: |
+          set -e
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "ERRO: configure o GitHub Secret VIRAPLAY_KEYSTORE_B64 antes de compilar."
+            exit 1
+          fi
 
-      - name: Enviar APKs
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/viraplay-release.jks"
+
+          echo "VIRAPLAY_KEYSTORE_PATH=$RUNNER_TEMP/viraplay-release.jks" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_STORE_PASSWORD=ViraPlayJCR#2026!Fix" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_KEY_ALIAS=viraplay" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_KEY_PASSWORD=ViraPlayJCR#2026!Fix" >> "$GITHUB_ENV"
+
+      - name: Compilar ViraPlay Cliente e ADM assinados
+        run: gradle :player:assembleRelease :admin:assembleRelease --stacktrace
+
+      - name: Enviar APKs assinados
         uses: actions/upload-artifact@v4
         with:
-          name: ViraPlay-APKs-debug
+          name: ViraPlay-APKs-release
           path: |
-            player/build/outputs/apk/debug/player-debug.apk
-            admin/build/outputs/apk/debug/admin-debug.apk
+            player/build/outputs/apk/release/player-release.apk
+            admin/build/outputs/apk/release/admin-release.apk
           if-no-files-found: error
