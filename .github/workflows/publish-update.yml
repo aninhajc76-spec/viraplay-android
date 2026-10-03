@@ -1,0 +1,139 @@
+name: Publicar atualização ViraPlay
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "VersionCode (ex.: 34)"
+        required: true
+        type: string
+      version_name:
+        description: "Versão (ex.: 3.4.0)"
+        required: true
+        type: string
+      message:
+        description: "Mensagem para os clientes"
+        required: true
+        default: "Nova atualização ViraPlay disponível."
+        type: string
+      mandatory:
+        description: "Atualização obrigatória?"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Android SDK 36
+        shell: bash
+        run: |
+          set -e
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Configurar Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Preparar assinatura fixa ViraPlay
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.VIRAPLAY_KEYSTORE_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.VIRAPLAY_SIGNING_PASSWORD }}
+        run: |
+          set -e
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$SIGNING_PASSWORD" ]; then
+            echo "ERRO: configure VIRAPLAY_KEYSTORE_B64 e VIRAPLAY_SIGNING_PASSWORD nos GitHub Secrets."
+            exit 1
+          fi
+
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/viraplay-release.jks"
+
+          echo "VIRAPLAY_KEYSTORE_PATH=$RUNNER_TEMP/viraplay-release.jks" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_STORE_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_KEY_ALIAS=viraplay" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_KEY_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Compilar versão assinada
+        run: |
+          gradle :player:assembleRelease :admin:assembleRelease \
+            -PviraplayVersionCode="${{ inputs.version_code }}" \
+            -PviraplayVersionName="${{ inputs.version_name }}" \
+            --stacktrace
+
+      - name: Preparar APKs
+        shell: bash
+        run: |
+          set -e
+          cp player/build/outputs/apk/release/player-release.apk "ViraPlay-${{ inputs.version_name }}.apk"
+          cp admin/build/outputs/apk/release/admin-release.apk "ViraPlay-ADM-${{ inputs.version_name }}.apk"
+          sha256sum "ViraPlay-${{ inputs.version_name }}.apk" | awk '{print $1}' > player.sha256
+
+      - name: Criar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version_name }}
+          name: ViraPlay ${{ inputs.version_name }}
+          body: ${{ inputs.message }}
+          files: |
+            ViraPlay-${{ inputs.version_name }}.apk
+            ViraPlay-ADM-${{ inputs.version_name }}.apk
+
+      - name: Atualizar manifesto dos clientes
+        shell: bash
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
+          MANDATORY: ${{ inputs.mandatory }}
+        run: |
+          set -e
+          SHA="$(cat player.sha256)"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION_NAME}/ViraPlay-${VERSION_NAME}.apk"
+
+          python3 - "$VERSION_CODE" "$VERSION_NAME" "$UPDATE_MESSAGE" "$MANDATORY" "$URL" "$SHA" <<'PY'
+          import json, sys
+          version_code, version_name, message, mandatory, url, sha = sys.argv[1:7]
+          data = {
+              "versionCode": int(version_code),
+              "versionName": version_name,
+              "mandatory": mandatory.lower() == "true",
+              "message": message,
+              "url": url,
+              "sha256": sha
+          }
+          with open("update/latest.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json
+
+          if git diff --cached --quiet; then
+            echo "Manifesto já estava atualizado."
+          else
+            git commit -m "Publica atualização ViraPlay ${VERSION_NAME}"
+            git push
+          fi
