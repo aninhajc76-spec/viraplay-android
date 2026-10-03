@@ -40,19 +40,20 @@ jobs:
         shell: bash
         env:
           KEYSTORE_B64: ${{ secrets.VIRAPLAY_KEYSTORE_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.VIRAPLAY_SIGNING_PASSWORD }}
         run: |
           set -e
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "ERRO: configure o GitHub Secret VIRAPLAY_KEYSTORE_B64 antes de compilar."
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$SIGNING_PASSWORD" ]; then
+            echo "ERRO: configure VIRAPLAY_KEYSTORE_B64 e VIRAPLAY_SIGNING_PASSWORD nos GitHub Secrets."
             exit 1
           fi
 
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/viraplay-release.jks"
 
           echo "VIRAPLAY_KEYSTORE_PATH=$RUNNER_TEMP/viraplay-release.jks" >> "$GITHUB_ENV"
-          echo "VIRAPLAY_STORE_PASSWORD=ViraPlayJCR#2026!Fix" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_STORE_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
           echo "VIRAPLAY_KEY_ALIAS=viraplay" >> "$GITHUB_ENV"
-          echo "VIRAPLAY_KEY_PASSWORD=ViraPlayJCR#2026!Fix" >> "$GITHUB_ENV"
+          echo "VIRAPLAY_KEY_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Compilar ViraPlay Cliente e ADM assinados
         run: gradle :player:assembleRelease :admin:assembleRelease --stacktrace
