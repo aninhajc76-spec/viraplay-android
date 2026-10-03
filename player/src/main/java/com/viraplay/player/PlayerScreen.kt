@@ -3,7 +3,6 @@ package com.viraplay.player
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.View
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.focusable
@@ -18,9 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -342,14 +342,13 @@ fun PlayerScreen(
                         return@onPreviewKeyEvent false
                     }
 
-                    val code = event.nativeKeyEvent.keyCode
-                    val navigationKey = code == AndroidKeyEvent.KEYCODE_DPAD_UP ||
-                        code == AndroidKeyEvent.KEYCODE_DPAD_DOWN ||
-                        code == AndroidKeyEvent.KEYCODE_DPAD_LEFT ||
-                        code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT ||
-                        code == AndroidKeyEvent.KEYCODE_DPAD_CENTER ||
-                        code == AndroidKeyEvent.KEYCODE_ENTER ||
-                        code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
+                    val navigationKey = event.key == Key.DirectionUp ||
+                        event.key == Key.DirectionDown ||
+                        event.key == Key.DirectionLeft ||
+                        event.key == Key.DirectionRight ||
+                        event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter
 
                     if (!controlsVisible && navigationKey) {
                         playerViewRef?.showController()
