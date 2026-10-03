@@ -146,7 +146,10 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
 
     suspend fun load() {
         try {
-            val loaded = withContext(Dispatchers.IO) { repo.list(token) }
+            val loaded = withContext(Dispatchers.IO) {
+                val base = repo.list(token)
+                repo.enrichMissingExpiries(token, base)
+            }
             devices = loaded
             status = "${loaded.size} aparelho(s)"
         } catch (e: Throwable) {

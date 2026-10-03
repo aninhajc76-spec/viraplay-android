@@ -12,8 +12,8 @@ android {
         applicationId = "com.viraplay.player"
         minSdk = 23
         targetSdk = 36
-        versionCode = 31
-        versionName = "3.1.0"
+        versionCode = 32
+        versionName = "3.2.0"
     }
 
     buildFeatures { compose = true }
@@ -37,6 +37,7 @@ dependencies {
     implementation(composeBom)
 
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")

@@ -3,15 +3,18 @@ package com.viraplay.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.viraplay.shared.SupportConfig
@@ -25,14 +28,9 @@ fun ActivationScreen(
     onSupport: () -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(VpBg, VpPanel.copy(alpha = 0.78f), VpBg)
-                )
-            )
-            .padding(28.dp),
+        modifier = Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(VpBg, VpPanel.copy(alpha = 0.78f), VpBg))
+        ).padding(28.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -43,10 +41,7 @@ fun ActivationScreen(
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier.padding(26.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Ative seu dispositivo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
                     Spacer(Modifier.height(6.dp))
                     Text("Envie este código ao suporte ViraPlay.", color = VpMuted, fontSize = 14.sp)
@@ -72,9 +67,7 @@ fun ActivationScreen(
                         Button(onClick = onRefresh, enabled = !loading, modifier = Modifier.weight(1f)) {
                             Text(if (loading) "Carregando..." else "Atualizar")
                         }
-                        OutlinedButton(onClick = onSupport, modifier = Modifier.weight(1f)) {
-                            Text("Suporte")
-                        }
+                        OutlinedButton(onClick = onSupport, modifier = Modifier.weight(1f)) { Text("Suporte") }
                     }
                 }
             }
@@ -83,11 +76,7 @@ fun ActivationScreen(
 }
 
 @Composable
-fun BlockedScreen(
-    code: String,
-    onSupport: () -> Unit,
-    onRefresh: () -> Unit
-) {
+fun BlockedScreen(code: String, onSupport: () -> Unit, onRefresh: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(VpBg).padding(28.dp),
         verticalArrangement = Arrangement.Center,
@@ -107,14 +96,9 @@ fun BlockedScreen(
 }
 
 @Composable
-fun SupportScreen(
-    code: String,
-    isTv: Boolean,
-    onBack: () -> Unit
-) {
+fun SupportScreen(code: String, isTv: Boolean, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
-
     Surface(color = VpBg, modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.padding(if (isTv) 42.dp else 24.dp),
@@ -137,23 +121,14 @@ fun SupportScreen(
                     Text("Código deste aparelho: $code", color = VpMuted)
                     Spacer(Modifier.height(18.dp))
                     if (isTv) {
-                        Text(
-                            "Abra o WhatsApp no celular e envie seu código para o número acima.",
-                            color = VpMuted,
-                            fontSize = 14.sp
-                        )
+                        Text("Abra o WhatsApp no celular e envie seu código para o número acima.", color = VpMuted, fontSize = 14.sp)
                     } else {
-                        Button(
-                            onClick = { Support.openWhatsApp(context, code) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Button(onClick = { Support.openWhatsApp(context, code) }, modifier = Modifier.fillMaxWidth()) {
                             Text("Abrir WhatsApp")
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                        Text("Voltar")
-                    }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
                 }
             }
         }
@@ -168,12 +143,27 @@ fun SettingsScreen(
     isTv: Boolean,
     onBack: () -> Unit,
     onSupport: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onParentalUnlocked: () -> Unit
 ) {
     BackHandler(onBack = onBack)
+    val context = LocalContext.current
+    val prefs = remember { PlaybackPreferences(context) }
+    var groupChannels by remember { mutableStateOf(prefs.groupChannels) }
+    var autoQuality by remember { mutableStateOf(prefs.autoQuality) }
+    var manualQuality by remember { mutableStateOf(prefs.manualQuality) }
+    var parentalEnabled by remember { mutableStateOf(prefs.parentalEnabled) }
+    var pinDialog by remember { mutableStateOf(false) }
+    var unlockDialog by remember { mutableStateOf(false) }
+    var currentPin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+
     Surface(color = VpBg, modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.padding(if (isTv) 36.dp else 20.dp),
+            modifier = Modifier
+                .padding(if (isTv) 36.dp else 20.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -183,30 +173,178 @@ fun SettingsScreen(
             }
 
             Text("Configurações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 28.sp)
-            Text("Informações do seu ViraPlay", color = VpMuted, fontSize = 12.sp)
+            Text("Informações e preferências do seu ViraPlay", color = VpMuted, fontSize = 12.sp)
 
             SettingsCard("Status", status)
             SettingsCard("Código do aparelho", code)
             accessText?.let { SettingsCard("Vencimento", it) }
-            SettingsCard("Versão", "ViraPlay 3.1.0 Beta")
+            SettingsCard("Versão", "ViraPlay 3.2.0 Beta")
 
-            Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
-                Text("Atualizar catálogo")
+            ToggleCard(
+                title = "Agrupar canais",
+                subtitle = "Junta SD, HD, FHD e 4K do mesmo canal em uma única opção.",
+                checked = groupChannels,
+                onChecked = {
+                    groupChannels = it
+                    prefs.groupChannels = it
+                }
+            )
+
+            ToggleCard(
+                title = "Qualidade automática",
+                subtitle = "Ativada por padrão. O app prioriza a melhor qualidade e reduz se a conexão não acompanhar.",
+                checked = autoQuality,
+                onChecked = {
+                    autoQuality = it
+                    prefs.autoQuality = it
+                }
+            )
+
+            if (!autoQuality) {
+                Card(colors = CardDefaults.cardColors(containerColor = VpPanel), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Text("Qualidade preferida", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            listOf("4K", "FHD", "HD", "SD").forEach { q ->
+                                FilterChip(
+                                    selected = manualQuality == q,
+                                    onClick = {
+                                        manualQuality = q
+                                        prefs.manualQuality = q
+                                    },
+                                    label = { Text(q) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
-            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) {
-                Text("Suporte ViraPlay")
+
+            ToggleCard(
+                title = "Controle parental",
+                subtitle = "Protege categorias e canais adultos com um PIN de 4 números.",
+                checked = parentalEnabled,
+                onChecked = {
+                    parentalEnabled = it
+                    prefs.parentalEnabled = it
+                }
+            )
+
+            OutlinedButton(onClick = {
+                currentPin = ""
+                newPin = ""
+                pinError = null
+                pinDialog = true
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (prefs.hasPin()) "Alterar PIN parental" else "Criar PIN parental")
             }
+
+            if (parentalEnabled && prefs.hasPin()) {
+                OutlinedButton(onClick = {
+                    currentPin = ""
+                    pinError = null
+                    unlockDialog = true
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Desbloquear conteúdo adulto nesta sessão")
+                }
+            }
+
+            Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("Atualizar catálogo") }
+            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte ViraPlay") }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+
+    if (pinDialog) {
+        val changing = prefs.hasPin()
+        AlertDialog(
+            onDismissRequest = { pinDialog = false },
+            title = { Text(if (changing) "Alterar PIN" else "Criar PIN") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (changing) {
+                        OutlinedTextField(
+                            value = currentPin,
+                            onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) currentPin = it },
+                            label = { Text("PIN atual") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true
+                        )
+                    }
+                    OutlinedTextField(
+                        value = newPin,
+                        onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) newPin = it },
+                        label = { Text("Novo PIN (4 números)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                    pinError?.let { Text(it, color = VpDanger) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (changing && !prefs.verifyPin(currentPin)) {
+                        pinError = "PIN atual incorreto."
+                    } else if (!prefs.setPin(newPin)) {
+                        pinError = "Digite exatamente 4 números."
+                    } else {
+                        onParentalUnlocked()
+                        pinDialog = false
+                    }
+                }) { Text("Salvar PIN") }
+            },
+            dismissButton = { TextButton(onClick = { pinDialog = false }) { Text("Cancelar") } }
+        )
+    }
+    if (unlockDialog) {
+        AlertDialog(
+            onDismissRequest = { unlockDialog = false },
+            title = { Text("Desbloquear conteúdo adulto") },
+            text = {
+                Column {
+                    Text("Digite seu PIN de 4 números. O desbloqueio vale até fechar o aplicativo.")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = currentPin,
+                        onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) currentPin = it },
+                        label = { Text("PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                    pinError?.let { Text(it, color = VpDanger) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (prefs.verifyPin(currentPin)) {
+                        onParentalUnlocked()
+                        unlockDialog = false
+                    } else pinError = "PIN incorreto."
+                }) { Text("Desbloquear") }
+            },
+            dismissButton = { TextButton(onClick = { unlockDialog = false }) { Text("Cancelar") } }
+        )
+    }
+
+}
+
+@Composable
+private fun ToggleCard(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = VpPanel), shape = RoundedCornerShape(18.dp)) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = VpMuted, fontSize = 11.sp)
+            }
+            Switch(checked = checked, onCheckedChange = onChecked)
         }
     }
 }
 
 @Composable
 private fun SettingsCard(title: String, value: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = VpPanel),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = VpPanel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Text(title, color = VpMuted, fontSize = 11.sp)
             Spacer(Modifier.height(4.dp))

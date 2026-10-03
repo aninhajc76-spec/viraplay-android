@@ -9,12 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import com.viraplay.shared.ContentType
 import com.viraplay.shared.XtreamAccountInfo
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,6 +46,7 @@ fun ViraPlayApp() {
     val db = remember { CatalogDb(context) }
     val repository = remember { ContentRepository(context, db) }
     val uiStore = remember { UiStateStore(context) }
+    val preferences = remember { PlaybackPreferences(context) }
     val scope = rememberCoroutineScope()
 
     var section by remember {
@@ -65,6 +64,10 @@ fun ViraPlayApp() {
     var catalogVersion by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     var resumeItem by remember { mutableStateOf<CatalogItem?>(null) }
+    var protectedItem by remember { mutableStateOf<CatalogItem?>(null) }
+    var adultUnlocked by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
 
     suspend fun refresh(forceCatalog: Boolean) {
         val hadCatalog = db.hasCatalog()
@@ -93,9 +96,8 @@ fun ViraPlayApp() {
                 return
             }
 
-            accountInfo = withContext(Dispatchers.IO) {
-                repository.accountInfo(remoteUrl)
-            }
+            accountInfo = withContext(Dispatchers.IO) { repository.accountInfo(remoteUrl) }
+            ExpiryNotifier.notifyIfNeeded(context, accountInfo)
 
             val cachedUrl = db.getMeta("playlist_url")
             val lastSync = db.getMetaLong("last_sync")
@@ -103,34 +105,27 @@ fun ViraPlayApp() {
             val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
 
             if (needsSync) {
-                status = if (hadCatalog) {
-                    "Atualizando catálogo em segundo plano..."
-                } else {
-                    "Preparando catálogo pela primeira vez..."
-                }
-
+                status = if (hadCatalog) "Atualizando catálogo em segundo plano..." else "Preparando catálogo pela primeira vez..."
                 withContext(Dispatchers.IO) {
-                    repository.syncCatalog(remoteUrl) { progress ->
-                        scope.launch { status = progress }
-                    }
+                    repository.syncCatalog(remoteUrl) { progress -> scope.launch { status = progress } }
                 }
                 catalogVersion += 1
             }
 
             status = buildHeaderStatus(db.countAll(), accountInfo)
         } catch (e: Throwable) {
-            if (db.hasCatalog()) {
-                status = "Modo offline • catálogo salvo"
+            status = if (db.hasCatalog()) {
+                "Modo offline • catálogo salvo"
             } else {
                 val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
-                status = "Falha: $message"
+                "Falha: $message"
             }
         } finally {
             syncing = false
         }
     }
 
-    fun openItem(item: CatalogItem) {
+    fun reallyOpen(item: CatalogItem) {
         if (item.type == ContentType.SERIES) {
             overlay = Overlay.Series(item)
             return
@@ -142,14 +137,22 @@ fun ViraPlayApp() {
         }
 
         val (position, duration) = db.progress(item.itemKey)
-        val resumable = position > 30_000L &&
-            (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
-
+        val resumable = position > 30_000L && (duration <= 0L || position.toDouble() / duration.toDouble() < 0.95)
         if (resumable) {
             resumeItem = item.copy(progressMs = position, durationMs = duration)
         } else {
             overlay = Overlay.Player(item, 0L)
         }
+    }
+
+    fun openItem(item: CatalogItem) {
+        if (preferences.parentalEnabled && isAdultContent(item) && !adultUnlocked) {
+            protectedItem = item
+            pinInput = ""
+            pinError = null
+            return
+        }
+        reallyOpen(item)
     }
 
     LaunchedEffect(Unit) {
@@ -160,12 +163,11 @@ fun ViraPlayApp() {
         }
     }
 
+    val accessNotice = ExpiryNotifier.notice(accountInfo)
+    val adultAccess = adultUnlocked || !preferences.parentalEnabled
+
     MaterialTheme(colorScheme = ViraPlayColors) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(VpBg)
-        ) {
+        Box(Modifier.fillMaxSize().background(VpBg)) {
             when {
                 !enabled -> BlockedScreen(
                     code = identity.pairingCode,
@@ -187,6 +189,8 @@ fun ViraPlayApp() {
                     section = section,
                     catalogVersion = catalogVersion,
                     status = status,
+                    accessNotice = accessNotice,
+                    adultUnlocked = adultAccess,
                     onSection = {
                         section = it
                         uiStore.setSection(it.name)
@@ -200,9 +204,12 @@ fun ViraPlayApp() {
 
                 else -> MobileShell(
                     db = db,
+                    repository = repository,
                     section = section,
                     catalogVersion = catalogVersion,
                     status = status,
+                    accessNotice = accessNotice,
+                    adultUnlocked = adultAccess,
                     onSection = {
                         section = it
                         uiStore.setSection(it.name)
@@ -250,7 +257,8 @@ fun ViraPlayApp() {
                     isTv = isTv,
                     onBack = { overlay = null },
                     onSupport = { overlay = Overlay.Support },
-                    onRefresh = { scope.launch { refresh(true) } }
+                    onRefresh = { scope.launch { refresh(true) } },
+                    onParentalUnlocked = { adultUnlocked = true }
                 )
 
                 null -> Unit
@@ -260,26 +268,53 @@ fun ViraPlayApp() {
                 AlertDialog(
                     onDismissRequest = { resumeItem = null },
                     title = { Text("Continuar assistindo?") },
-                    text = {
-                        Text("Você parou em ${formatProgress(item.progressMs)}. Deseja continuar dali?")
-                    },
+                    text = { Text("Você parou em ${formatProgress(item.progressMs)}. Deseja continuar dali?") },
                     confirmButton = {
                         Button(onClick = {
                             resumeItem = null
                             overlay = Overlay.Player(item, item.progressMs)
-                        }) {
-                            Text("Continuar")
-                        }
+                        }) { Text("Continuar") }
                     },
                     dismissButton = {
                         TextButton(onClick = {
                             resumeItem = null
                             db.clearProgress(item.itemKey)
                             overlay = Overlay.Player(item, 0L)
-                        }) {
-                            Text("Do início")
-                        }
+                        }) { Text("Do início") }
                     }
+                )
+            }
+
+            protectedItem?.let { item ->
+                val creating = !preferences.hasPin()
+                AlertDialog(
+                    onDismissRequest = { protectedItem = null },
+                    title = { Text(if (creating) "Criar PIN parental" else "Conteúdo protegido") },
+                    text = {
+                        Column {
+                            Text(if (creating) "Crie um PIN de 4 números para proteger conteúdo adulto." else "Digite seu PIN de 4 números para continuar.")
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = pinInput,
+                                onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pinInput = it },
+                                label = { Text("PIN") },
+                                visualTransformation = PasswordVisualTransformation(),
+                                singleLine = true
+                            )
+                            pinError?.let { Text(it, color = VpDanger) }
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            val ok = if (creating) preferences.setPin(pinInput) else preferences.verifyPin(pinInput)
+                            if (ok) {
+                                adultUnlocked = true
+                                protectedItem = null
+                                reallyOpen(item)
+                            } else pinError = "PIN inválido. Use 4 números."
+                        }) { Text(if (creating) "Criar e continuar" else "Desbloquear") }
+                    },
+                    dismissButton = { TextButton(onClick = { protectedItem = null }) { Text("Cancelar") } }
                 )
             }
         }
@@ -287,44 +322,12 @@ fun ViraPlayApp() {
 }
 
 private fun buildHeaderStatus(count: Int, account: XtreamAccountInfo?): String {
-    val expiry = account?.expiresAtEpochSeconds ?: return "$count títulos"
-    val days = daysUntil(expiry)
-    return when {
-        days < 0 -> "$count títulos • acesso vencido"
-        days == 0 -> "$count títulos • vence hoje"
-        days <= 7 -> "$count títulos • vence em $days dia(s)"
-        else -> "$count títulos"
-    }
+    val notice = ExpiryNotifier.notice(account)
+    return if (notice != null) "$count títulos • $notice" else "$count títulos"
 }
 
 private fun accountDisplay(account: XtreamAccountInfo?): String? {
-    val expiry = account?.expiresAtEpochSeconds ?: return null
-    val date = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-        .format(Date(expiry * 1000L))
-    val days = daysUntil(expiry)
-    return when {
-        days < 0 -> "Vencido em $date"
-        days == 0 -> "Vence hoje • $date"
-        days <= 7 -> "Ativo até $date • faltam $days dia(s)"
-        else -> "Ativo até $date"
-    }
-}
-
-private fun daysUntil(epochSeconds: Long): Int {
-    val now = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    val target = Calendar.getInstance().apply {
-        timeInMillis = epochSeconds * 1000L
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    return ((target - now) / 86_400_000L).toInt()
+    val date = ExpiryNotifier.displayDate(account) ?: return null
+    val notice = ExpiryNotifier.notice(account)
+    return if (notice != null) "$notice • $date" else "Ativo até $date"
 }

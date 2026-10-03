@@ -1,0 +1,39 @@
+VIRAPLAY 3.2 BETA - PACOTE DE TESTE REAL
+
+Versao do Cliente: 3.2.0 (versionCode 32)
+Versao do ADM: 3.2.0 (versionCode 32)
+
+PRINCIPAIS MELHORIAS DESTA RODADA
+- Busca compacta por icone de lupa no celular e na TV.
+- Preview real de canal na Android TV antes de abrir em tela cheia.
+- Preview de canal no celular em painel inferior, com EPG e troca de canal.
+- EPG: programa atual e proximos programas quando o servidor fornecer os dados.
+- Agrupamento de canais SD/HD/FHD/4K ativo por padrao e opcao de desligar.
+- Qualidade automatica ativa por padrao e opcao de desligar.
+- Se Auto estiver desligado, o cliente escolhe 4K/FHD/HD/SD quando existirem.
+- Em Auto, o player usa estimativa de banda e tenta baixar a qualidade se a conexao nao acompanhar.
+- No player ao vivo: qualidade, canal anterior e proximo canal sem voltar para a lista.
+- Controles superiores acompanham o temporizador do player e somem para nao cobrir o video.
+- Botao Girar passa por paisagem normal, paisagem invertida e retrato.
+- Modos de tela Ajustar / Zoom / Preencher mantidos.
+- Controle parental com PIN de 4 digitos, criacao, alteracao e desbloqueio por sessao.
+- Conteudo adulto fica protegido por padrao enquanto a sessao nao for desbloqueada.
+- Aviso de vencimento nos 5 dias finais; abaixo de 6 horas mostra horas/minutos.
+- Notificacao local de vencimento e nova notificacao quando o acesso vencer.
+- No ADM, clientes sem vencimento salvo tentam detectar automaticamente a expiracao da lista.
+- Dominio, usuario e senha do servidor continuam fora do app do cliente.
+
+TESTE RAPIDO RECOMENDADO
+1. Lista de 4 horas: confirme aviso na Home/cabecalho e em Configuracoes.
+2. Permita notificacoes quando o Android pedir; confirme o alerta de vencimento.
+3. TV ao vivo: foque/tocar em um canal e confirme preview antes da tela cheia.
+4. EPG: confirme nome do programa atual e proximos quando disponivel.
+5. Ative/desative Agrupar canais em Ajustes.
+6. Ative/desative Qualidade automatica e troque a qualidade no player.
+7. Teste Girar nos dois lados e retrato.
+8. Aguarde os controles sumirem e toque/OK para reaparecerem.
+9. Teste PIN parental: criar, alterar e desbloquear a sessao.
+10. ADM: atualize a lista de clientes e confirme vencimento detectado quando a fonte informar.
+
+OBSERVACAO
+A disponibilidade de EPG e de multiplas qualidades depende do que a lista/servidor entrega para cada canal.

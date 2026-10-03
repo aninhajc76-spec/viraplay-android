@@ -29,6 +29,33 @@ class AdminRepository {
             )
         }.getOrNull()
 
+    fun enrichMissingExpiries(token: String, devices: List<AdminDevice>): List<AdminDevice> =
+        devices.map { device ->
+            val playlist = device.playlistUrl
+            val meta = ClientMetaCodec.decode(device.label)
+            if (playlist.isNullOrBlank() || meta.expiresIso != null) {
+                device
+            } else {
+                val expiry = detectExpiryIso(playlist)
+                if (expiry == null) {
+                    device
+                } else {
+                    runCatching {
+                        update(
+                            token = token,
+                            deviceId = device.deviceId,
+                            enabled = device.enabled,
+                            playlist = playlist,
+                            name = meta.name.ifBlank { "Cliente" },
+                            identifier = meta.identifier,
+                            expiresIso = expiry
+                        )
+                    }
+                    device.copy(label = ClientMetaCodec.encode(meta.name.ifBlank { "Cliente" }, meta.identifier, expiry))
+                }
+            }
+        }
+
     fun claim(
         token: String,
         code: String,

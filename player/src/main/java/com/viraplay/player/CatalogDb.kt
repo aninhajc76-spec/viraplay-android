@@ -265,6 +265,19 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(
     }
 
 
+    fun liveVariants(item: CatalogItem): List<CatalogItem> {
+        if (item.type != ContentType.LIVE) return listOf(item)
+        val categoryId = item.categoryId
+        val candidates = query(
+            type = ContentType.LIVE,
+            categoryId = categoryId,
+            search = "",
+            limit = 5000
+        )
+        val variants = liveVariants(candidates, item)
+        return if (variants.isEmpty()) listOf(item) else variants
+    }
+
     fun liveNeighbor(item: CatalogItem, next: Boolean): CatalogItem? {
         val generation = activeGeneration() ?: return null
         if (item.type != ContentType.LIVE) return null
