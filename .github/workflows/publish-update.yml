@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       message:
-        description: "Mensagem para os clientes"
+        description: "Mensagem para Cliente e ADM"
         required: true
         default: "Nova atualização ViraPlay disponível."
         type: string
@@ -74,22 +74,23 @@ jobs:
           echo "VIRAPLAY_KEY_ALIAS=viraplay" >> "$GITHUB_ENV"
           echo "VIRAPLAY_KEY_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Compilar versão assinada
+      - name: Compilar Cliente e ADM assinados
         run: |
           gradle :player:assembleRelease :admin:assembleRelease \
             -PviraplayVersionCode="${{ inputs.version_code }}" \
             -PviraplayVersionName="${{ inputs.version_name }}" \
             --stacktrace
 
-      - name: Preparar APKs
+      - name: Preparar APKs e hashes
         shell: bash
         run: |
           set -e
           cp player/build/outputs/apk/release/player-release.apk "ViraPlay-${{ inputs.version_name }}.apk"
           cp admin/build/outputs/apk/release/admin-release.apk "ViraPlay-ADM-${{ inputs.version_name }}.apk"
           sha256sum "ViraPlay-${{ inputs.version_name }}.apk" | awk '{print $1}' > player.sha256
+          sha256sum "ViraPlay-ADM-${{ inputs.version_name }}.apk" | awk '{print $1}' > admin.sha256
 
-      - name: Criar Release
+      - name: Criar Release com os dois aplicativos
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version_name }}
@@ -99,7 +100,7 @@ jobs:
             ViraPlay-${{ inputs.version_name }}.apk
             ViraPlay-ADM-${{ inputs.version_name }}.apk
 
-      - name: Atualizar manifesto dos clientes
+      - name: Notificar Cliente e ADM
         shell: bash
         env:
           VERSION_CODE: ${{ inputs.version_code }}
@@ -108,19 +109,28 @@ jobs:
           MANDATORY: ${{ inputs.mandatory }}
         run: |
           set -e
-          SHA="$(cat player.sha256)"
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION_NAME}/ViraPlay-${VERSION_NAME}.apk"
+          PLAYER_SHA="$(cat player.sha256)"
+          ADMIN_SHA="$(cat admin.sha256)"
+          PLAYER_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION_NAME}/ViraPlay-${VERSION_NAME}.apk"
+          ADMIN_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION_NAME}/ViraPlay-ADM-${VERSION_NAME}.apk"
 
-          python3 - "$VERSION_CODE" "$VERSION_NAME" "$UPDATE_MESSAGE" "$MANDATORY" "$URL" "$SHA" <<'PY'
+          python3 - "$VERSION_CODE" "$VERSION_NAME" "$UPDATE_MESSAGE" "$MANDATORY" "$PLAYER_URL" "$PLAYER_SHA" "$ADMIN_URL" "$ADMIN_SHA" <<'PY'
           import json, sys
-          version_code, version_name, message, mandatory, url, sha = sys.argv[1:7]
+          version_code, version_name, message, mandatory, player_url, player_sha, admin_url, admin_sha = sys.argv[1:9]
+          required = mandatory.lower() == "true"
           data = {
               "versionCode": int(version_code),
               "versionName": version_name,
-              "mandatory": mandatory.lower() == "true",
+              "mandatory": required,
               "message": message,
-              "url": url,
-              "sha256": sha
+              "url": player_url,
+              "sha256": player_sha,
+              "adminVersionCode": int(version_code),
+              "adminVersionName": version_name,
+              "adminMandatory": required,
+              "adminMessage": message,
+              "adminUrl": admin_url,
+              "adminSha256": admin_sha
           }
           with open("update/latest.json", "w", encoding="utf-8") as f:
               json.dump(data, f, ensure_ascii=False, indent=2)
@@ -134,6 +144,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Manifesto já estava atualizado."
           else
-            git commit -m "Publica atualização ViraPlay ${VERSION_NAME}"
+            git commit -m "Publica atualização ViraPlay ${VERSION_NAME} para Cliente e ADM"
             git push
           fi
