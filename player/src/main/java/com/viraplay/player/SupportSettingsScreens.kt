@@ -178,7 +178,7 @@ fun SettingsScreen(
             SettingsCard("Status", status)
             SettingsCard("Código do aparelho", code)
             accessText?.let { SettingsCard("Vencimento", it) }
-            SettingsCard("Versão", "ViraPlay 3.2.0 Beta")
+            SettingsCard("Versão", "ViraPlay ${BuildConfig.VERSION_NAME}")
 
             ToggleCard(
                 title = "Agrupar canais",
