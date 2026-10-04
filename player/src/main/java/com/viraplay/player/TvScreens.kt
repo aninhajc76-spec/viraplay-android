@@ -171,147 +171,176 @@ private fun TvHome(
         delay(120)
         runCatching { firstFocus.requestFocus() }
     }
-
     LaunchedEffect(version) {
         counts = withContext(Dispatchers.IO) { readCounts() }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(VpBg, VpPanel.copy(alpha = 0.78f), VpBg)
-                )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                listOf(Color(0xFF020713), Color(0xFF061426), Color(0xFF020713))
             )
-            .padding(horizontal = 42.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        BrandWordmark(large = true)
-        Text(
-            "Filmes, séries e TV ao vivo em um só lugar",
-            color = VpMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 2.dp)
         )
-
-        accessNotice?.let {
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                color = VpPurple.copy(alpha = 0.17f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    it,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(
-            Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 44.dp, vertical = 26.dp)
         ) {
-            FocusTile(
-                onClick = { onSection(MainSection.LIVE) },
-                modifier = Modifier
-                    .weight(1.25f)
-                    .fillMaxHeight()
-                    .focusRequester(firstFocus)
-            ) {
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.linearGradient(listOf(Color(0xFF0A4770), Color(0xFF09203C), Color(0xFF151337)))
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BrandWordmark(large = true)
+                Spacer(Modifier.width(18.dp))
+                Surface(
+                    color = VpCyan.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(50),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = 0.28f))
                 ) {
-                    Column(
-                        Modifier.fillMaxSize().padding(26.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Surface(color = VpCyan.copy(alpha = 0.16f), shape = RoundedCornerShape(50)) {
-                            Text("●  AO VIVO", color = VpCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                        }
-                        Column {
-                            Text("TV", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Black)
-                            Text("Canais ao vivo", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                            Text("${counts.live} canais disponíveis", color = VpMuted, fontSize = 12.sp)
-                        }
-                    }
+                    Text(
+                        "TV EXPERIENCE",
+                        color = VpCyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                    )
                 }
-            }
-
-            Column(
-                Modifier.weight(1.4f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HomeTile("Filmes", "${counts.movies} títulos", Modifier.weight(1f)) {
-                        onSection(MainSection.MOVIES)
-                    }
-                    HomeTile("Séries", "${counts.series} títulos", Modifier.weight(1f)) {
-                        onSection(MainSection.SERIES)
-                    }
-                }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HomeTile("Favoritos", "Sua seleção", Modifier.weight(1f)) {
-                        onSection(MainSection.FAVORITES)
-                    }
-                    HomeTile("Continuar", "${counts.continueWatching} em andamento", Modifier.weight(1f)) {
-                        onContinue()
-                    }
-                }
-            }
-
-            Column(
-                Modifier.weight(0.9f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                HomeTile("Suporte", "WhatsApp ViraPlay", Modifier.weight(1f), onSupport)
-                HomeTile("Configurações", "Qualidade, PIN e aparelho", Modifier.weight(1f), onSettings)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        Surface(
-            color = VpPanel,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Text("ViraPlay ${BuildConfig.VERSION_NAME}", color = VpCyan, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(20.dp))
-                Text(status, color = VpMuted)
                 Spacer(Modifier.weight(1f))
-                Text("Experiência TV • ViraPlay", color = VpMuted, fontSize = 11.sp)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("ViraPlay ${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(status, color = VpMuted, fontSize = 10.sp, maxLines = 1)
+                }
+            }
+
+            accessNotice?.let {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    color = Color(0xFF25173E),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .45f))
+                ) {
+                    Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 11.sp)
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(
+                Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                FocusTile(
+                    onClick = { onSection(MainSection.LIVE) },
+                    modifier = Modifier.weight(1.42f).fillMaxHeight().focusRequester(firstFocus)
+                ) {
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF063D61), Color(0xFF082443), Color(0xFF1A1133))
+                            )
+                        )
+                    ) {
+                        Box(
+                            Modifier.align(Alignment.TopEnd).fillMaxHeight().width(150.dp).background(
+                                Brush.horizontalGradient(listOf(Color.Transparent, VpPurple.copy(alpha = .16f)))
+                            )
+                        )
+                        Column(
+                            Modifier.fillMaxSize().padding(28.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(color = VpCyan, shape = RoundedCornerShape(50)) {
+                                    Text("●  AO VIVO", color = Color(0xFF00131D), fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text("${counts.live} canais", color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
+                            }
+                            Column {
+                                Text("Assista agora", color = VpCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("TV ao vivo", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                                Text("Entre direto nos seus canais com prévia, favoritos e troca rápida.", color = Color.White.copy(alpha = .70f), fontSize = 12.sp, modifier = Modifier.widthIn(max = 390.dp))
+                                Spacer(Modifier.height(16.dp))
+                                Surface(color = Color.White, shape = RoundedCornerShape(50)) {
+                                    Text("ABRIR TV", color = Color(0xFF03111F), fontWeight = FontWeight.Black, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        PremiumHomeCard("FILMES", "${counts.movies}", "títulos", Modifier.weight(1f), VpCyan) { onSection(MainSection.MOVIES) }
+                        PremiumHomeCard("SÉRIES", "${counts.series}", "títulos", Modifier.weight(1f), VpPurple) { onSection(MainSection.SERIES) }
+                    }
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        PremiumHomeCard("CONTINUAR", counts.continueWatching.toString(), "em andamento", Modifier.weight(1f), VpGreen) { onContinue() }
+                        PremiumHomeCard("FAVORITOS", "★", "sua seleção", Modifier.weight(1f), Color(0xFFFFC857)) { onSection(MainSection.FAVORITES) }
+                    }
+                    Row(Modifier.height(82.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        PremiumActionCard("SUPORTE", "WhatsApp e QR Code", Modifier.weight(1f), onSupport)
+                        PremiumActionCard("CONFIGURAÇÕES", "Qualidade, PIN e aparelho", Modifier.weight(1f), onSettings)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("ViraPlay", color = VpCyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.width(4.dp).height(4.dp).background(VpMuted, RoundedCornerShape(50)))
+                Spacer(Modifier.width(10.dp))
+                Text("Filmes • Séries • TV ao vivo", color = VpMuted, fontSize = 10.sp)
+                Spacer(Modifier.weight(1f))
+                Text("Controle remoto otimizado", color = VpMuted, fontSize = 10.sp)
             }
         }
     }
 }
 
 @Composable
-private fun HomeTile(
+private fun PremiumHomeCard(
     title: String,
+    value: String,
     subtitle: String,
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
+    accent: Color,
     onClick: () -> Unit
 ) {
-    FocusTile(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+    FocusTile(onClick = onClick, modifier = modifier.fillMaxHeight()) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.linearGradient(listOf(Color(0xFF0A203C), Color(0xFF08162C), VpPurple.copy(alpha = 0.10f)))
-            ).padding(20.dp),
-            contentAlignment = Alignment.CenterStart
+                Brush.linearGradient(listOf(Color(0xFF081B31), Color(0xFF061426)))
+            ).padding(18.dp)
         ) {
-            Column {
-                Box(Modifier.width(34.dp).height(3.dp).background(VpCyan, RoundedCornerShape(50)))
-                Spacer(Modifier.height(10.dp))
-                Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.align(Alignment.TopEnd).size(42.dp).background(accent.copy(alpha = .11f), RoundedCornerShape(14.dp)))
+            Column(Modifier.align(Alignment.BottomStart)) {
+                Text(title, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(4.dp))
-                Text(subtitle, color = VpMuted, fontSize = 12.sp)
+                Text(value, color = Color.White, fontSize = if (value.length > 4) 23.sp else 30.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(subtitle, color = VpMuted, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumActionCard(
+    title: String,
+    subtitle: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    FocusTile(onClick = onClick, modifier = modifier.fillMaxHeight()) {
+        Row(
+            Modifier.fillMaxSize().background(Color(0xFF07182C)).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.width(3.dp).height(34.dp).background(VpCyan, RoundedCornerShape(50)))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                Text(subtitle, color = VpMuted, fontSize = 9.sp, maxLines = 1)
             }
         }
     }
@@ -374,20 +403,33 @@ private fun TvTopNav(
     onSettings: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        color = Color(0xFF04101F),
+        tonalElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        TvNavChip("Início", section == MainSection.HOME, onHome)
-        TvNavChip("Ao vivo", section == MainSection.LIVE) { onSection(MainSection.LIVE) }
-        TvNavChip("Filmes", section == MainSection.MOVIES) { onSection(MainSection.MOVIES) }
-        TvNavChip("Séries", section == MainSection.SERIES) { onSection(MainSection.SERIES) }
-        TvNavChip("Favoritos", section == MainSection.FAVORITES) { onSection(MainSection.FAVORITES) }
-        Spacer(Modifier.weight(1f))
-        TvNavChip("Atualizar", false, onRefresh)
-        TvNavChip("Ajustes", false, onSettings)
-        TvNavChip("Suporte", false, onSupport)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BrandWordmark()
+            Spacer(Modifier.width(24.dp))
+            Surface(color = VpPanelAlt, shape = RoundedCornerShape(50)) {
+                Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TvNavChip("Início", section == MainSection.HOME, onHome)
+                    TvNavChip("Ao vivo", section == MainSection.LIVE) { onSection(MainSection.LIVE) }
+                    TvNavChip("Filmes", section == MainSection.MOVIES) { onSection(MainSection.MOVIES) }
+                    TvNavChip("Séries", section == MainSection.SERIES) { onSection(MainSection.SERIES) }
+                    TvNavChip("Favoritos", section == MainSection.FAVORITES) { onSection(MainSection.FAVORITES) }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            TvNavChip("Atualizar", false, onRefresh)
+            Spacer(Modifier.width(6.dp))
+            TvNavChip("Ajustes", false, onSettings)
+            Spacer(Modifier.width(6.dp))
+            TvNavChip("Suporte", false, onSupport)
+        }
     }
 }
 
@@ -395,14 +437,20 @@ private fun TvTopNav(
 private fun TvNavChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FocusTile(
         onClick = onClick,
-        modifier = Modifier.height(44.dp).widthIn(min = 78.dp, max = 112.dp)
+        modifier = Modifier.height(42.dp).widthIn(min = 82.dp, max = 118.dp)
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().background(
+                if (selected) Brush.horizontalGradient(listOf(Color(0xFF0C4D72), Color(0xFF12365C)))
+                else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+            ),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
                 label,
-                color = if (selected) VpCyan else Color.White,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 13.sp
+                color = if (selected) Color.White else VpMuted,
+                fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+                fontSize = 12.sp
             )
         }
     }

@@ -1,0 +1,25 @@
+ViraPlay 3.3.5 - REDESIGN TV DE VERDADE
+versionCode: 38
+versionName: 3.3.5
+
+Esta versão substitui a 3.3.4 como revisão visual principal.
+
+MUDANÇAS VISUAIS GRANDES NA TV
+- Home reconstruída: cabeçalho novo, hero grande da TV ao vivo, cartões de Filmes/Séries/Continuar/Favoritos e ações separadas de Suporte/Configurações.
+- Navegação interna reconstruída com marca ViraPlay fixa e menu em cápsula.
+- Player TV com controles movidos para a parte inferior, padrão mais próximo de apps de streaming.
+- Overlay do player mais escuro e mais limpo para preservar contraste do vídeo.
+- Mantém barra de progresso, tempo atual/total, -10s/+10s, pausa, qualidade e troca de canal.
+- Mantém ajuste de tela Ajustar/Zoom/Preencher aplicado diretamente no PlayerView.
+- Mantém retorno do Ao Vivo preservando categoria/canal/posição.
+- Mantém QR Code e novo Suporte.
+- Mantém fundo/shutter preto para combater imagem lavada/cinza.
+- Mantém ícone com área segura para Android TV.
+
+CELULAR
+- Base funcional preservada; continua com as melhorias visuais leves da 3.3.4.
+
+IMPORTANTE
+- Importar antes de publicar.
+- Build/teste primeiro.
+- Publicar somente depois da validação na TV.

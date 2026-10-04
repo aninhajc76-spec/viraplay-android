@@ -444,11 +444,11 @@ fun PlayerScreen(
 
             AnimatedVisibility(
                 visible = controlsVisible,
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier.align(if (isTv) Alignment.BottomCenter else Alignment.TopCenter)
             ) {
                 Surface(
-                    color = Color.Black.copy(alpha = 0.82f),
-                    shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
+                    color = Color.Black.copy(alpha = if (isTv) 0.90f else 0.82f),
+                    shape = if (isTv) RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp) else RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
