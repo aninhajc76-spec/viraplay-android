@@ -194,7 +194,10 @@ fun ViraPlayApp() {
 
     MaterialTheme(colorScheme = ViraPlayColors) {
         Box(Modifier.fillMaxSize().background(VpBg)) {
-            when {
+            // Não mantém a tela anterior viva por trás do player/configurações.
+            // Em TV isso evita disputa de foco e evita o SurfaceView da prévia aparecer
+            // como uma segunda imagem por cima do vídeo em tela cheia.
+            if (overlay == null) when {
                 !enabled -> BlockedScreen(
                     code = identity.pairingCode,
                     onSupport = { overlay = Overlay.Support },

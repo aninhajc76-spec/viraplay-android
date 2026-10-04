@@ -1,0 +1,33 @@
+ViraPlay 3.3.3 - Correções completas para Android TV
+
+Foco desta atualização: TV. O comportamento do celular foi preservado.
+
+Corrigido:
+- remove a espera artificial/tela cinza no início e força fundo escuro desde o primeiro frame;
+- a tela anterior deixa de continuar viva atrás do Player/Configurações, evitando disputa de foco;
+- corrige a "segunda imagem" pequena aparecendo sobre o vídeo em tela cheia;
+- foco do controle remoto muito mais visível: borda branca forte + destaque azul;
+- navegação superior da TV refeita com botões próprios para controle remoto;
+- prévia do canal não abre mais só ao passar o foco;
+- primeiro OK no canal inicia a prévia;
+- segundo OK no mesmo canal abre em tela cheia;
+- Player da TV ganha controles próprios: pausar/reproduzir, -10s, +10s, ajuste de tela, qualidade e troca de canal;
+- OK/setas fazem os controles reaparecerem quando estiverem ocultos;
+- PlayerView não rouba mais o foco do controle remoto;
+- ajuste de tela volta a alternar entre Ajustar / Zoom / Preencher;
+- qualidade automática não derruba a qualidade do canal logo após abrir na TV;
+- fallback de decodificador ativado para TVs com dificuldade em alguns vídeos;
+- erros de codec passam a ter mensagem amigável, sem texto técnico do MediaCodec;
+- Configurações deixam de disputar foco com a tela que estava atrás;
+- cartões de informações das Configurações passam a participar do foco, facilitando descer com o controle;
+- Home da TV recebe fundo em gradiente, versão dinâmica e foco mais evidente.
+
+Versão preparada:
+- versionCode: 36
+- versionName: 3.3.3
+
+Fluxo:
+1. Suba este ZIP no repositório.
+2. Rode "Importar projeto ViraPlay".
+3. Depois rode "Publicar atualização ViraPlay" com versionCode 36 / versionName 3.3.3.
+4. Teste primeiro na sua TV.

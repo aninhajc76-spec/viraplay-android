@@ -1,6 +1,7 @@
 package com.viraplay.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -161,7 +163,14 @@ private fun TvHome(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 42.dp, vertical = 24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    listOf(VpBg, VpPanel.copy(alpha = 0.78f), VpBg)
+                )
+            )
+            .padding(horizontal = 42.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         BrandWordmark(large = true)
@@ -241,7 +250,7 @@ private fun TvHome(
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Text("ViraPlay 3.3 Beta", color = VpCyan, fontWeight = FontWeight.Bold)
+                Text("ViraPlay ${BuildConfig.VERSION_NAME}", color = VpCyan, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(20.dp))
                 Text(status, color = VpMuted)
                 Spacer(Modifier.weight(1f))
@@ -327,29 +336,36 @@ private fun TvTopNav(
     onRefresh: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedButton(onClick = onHome) { Text("Voltar") }
-
-        listOf(
-            MainSection.LIVE,
-            MainSection.MOVIES,
-            MainSection.SERIES,
-            MainSection.FAVORITES
-        ).forEach { item ->
-            if (section == item) {
-                Button(onClick = { onSection(item) }) { Text(item.label) }
-            } else {
-                OutlinedButton(onClick = { onSection(item) }) { Text(item.label) }
-            }
-        }
-
+        TvNavChip("Início", section == MainSection.HOME, onHome)
+        TvNavChip("Ao vivo", section == MainSection.LIVE) { onSection(MainSection.LIVE) }
+        TvNavChip("Filmes", section == MainSection.MOVIES) { onSection(MainSection.MOVIES) }
+        TvNavChip("Séries", section == MainSection.SERIES) { onSection(MainSection.SERIES) }
+        TvNavChip("Favoritos", section == MainSection.FAVORITES) { onSection(MainSection.FAVORITES) }
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = onRefresh) { Text("Atualizar") }
-        TextButton(onClick = onSettings) { Text("Ajustes") }
-        TextButton(onClick = onSupport) { Text("Suporte") }
+        TvNavChip("Atualizar", false, onRefresh)
+        TvNavChip("Ajustes", false, onSettings)
+        TvNavChip("Suporte", false, onSupport)
+    }
+}
+
+@Composable
+private fun TvNavChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FocusTile(
+        onClick = onClick,
+        modifier = Modifier.height(44.dp).widthIn(min = 78.dp, max = 112.dp)
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                color = if (selected) VpCyan else Color.White,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 13.sp
+            )
+        }
     }
 }
 
@@ -371,6 +387,7 @@ private fun TvLive(
     var searchOpen by remember { mutableStateOf(false) }
     var rawItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
     var selected by remember { mutableStateOf<CatalogItem?>(null) }
+    var previewed by remember { mutableStateOf<CatalogItem?>(null) }
     var epg by remember { mutableStateOf<List<EpgProgram>>(emptyList()) }
     var totalCount by remember { mutableIntStateOf(db.count(ContentType.LIVE)) }
     var limit by remember(selectedCategory, search) { mutableIntStateOf(700) }
@@ -396,6 +413,7 @@ private fun TvLive(
         val shown = if (prefs.groupChannels) groupLiveItems(rawItems) else rawItems
         if (selected == null || shown.none { it.itemKey == selected?.itemKey }) {
             selected = shown.firstOrNull()
+            previewed = null
         }
     }
 
@@ -463,7 +481,14 @@ private fun TvLive(
                 LiveRow(
                     item = item,
                     selected = selected?.itemKey == item.itemKey,
-                    onClick = { onOpen(item) },
+                    onClick = {
+                        selected = item
+                        if (previewed?.itemKey == item.itemKey) {
+                            onOpen(item)
+                        } else {
+                            previewed = item
+                        }
+                    },
                     onFavorite = {
                         db.toggleFavorite(item.itemKey)
                         onChanged()
@@ -489,6 +514,7 @@ private fun TvLive(
         TvLivePreview(
             db = db,
             item = selected,
+            previewItem = previewed,
             epg = epg,
             modifier = Modifier.weight(0.95f).fillMaxHeight(),
             onPlay = { selected?.let(onOpen) },
@@ -528,6 +554,7 @@ private fun CategoryButton(
 private fun TvLivePreview(
     db: CatalogDb,
     item: CatalogItem?,
+    previewItem: CatalogItem?,
     epg: List<EpgProgram>,
     modifier: Modifier,
     onPlay: () -> Unit,
@@ -561,7 +588,22 @@ private fun TvLivePreview(
                 return@Column
             }
 
-            LivePreviewPlayer(item, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            if (previewItem?.itemKey == item.itemKey) {
+                LivePreviewPlayer(item, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Prévia", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text("OK: iniciar prévia • OK novamente: tela cheia", color = VpMuted, fontSize = 11.sp)
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
 
             Text(

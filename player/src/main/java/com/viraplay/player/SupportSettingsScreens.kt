@@ -1,7 +1,9 @@
 package com.viraplay.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -451,9 +454,20 @@ private fun ToggleCard(title: String, subtitle: String, checked: Boolean, onChec
 
 @Composable
 private fun SettingsCard(title: String, value: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = VpPanel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+    var focused by remember { mutableStateOf(false) }
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (focused) VpCyan.copy(alpha = 0.16f) else VpPanel
+        ),
+        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) Color.White else VpBorder),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+    ) {
         Column(Modifier.padding(18.dp)) {
-            Text(title, color = VpMuted, fontSize = 11.sp)
+            Text(title, color = if (focused) VpCyan else VpMuted, fontSize = 11.sp)
             Spacer(Modifier.height(4.dp))
             Text(value, color = Color.White, fontWeight = FontWeight.SemiBold)
         }

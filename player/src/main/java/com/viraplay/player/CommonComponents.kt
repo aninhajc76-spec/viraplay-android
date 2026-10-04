@@ -83,14 +83,14 @@ fun FocusTile(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.025f else 1f,
+        targetValue = if (focused) 1.045f else 1f,
         animationSpec = tween(110),
         label = "vp_focus_scale"
     )
 
     Surface(
-        color = if (focused) VpPanelAlt else VpPanel,
-        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) VpCyan else VpBorder),
+        color = if (focused) VpCyan.copy(alpha = 0.20f) else VpPanel,
+        border = BorderStroke(if (focused) 4.dp else 1.dp, if (focused) Color.White else VpBorder),
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
             .graphicsLayer {
@@ -117,7 +117,7 @@ fun PosterCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.018f else 1f,
+        targetValue = if (focused) 1.05f else 1f,
         animationSpec = tween(100),
         label = "poster_focus_scale"
     )
@@ -141,8 +141,8 @@ fun PosterCard(
                 .aspectRatio(0.68f)
                 .clip(RoundedCornerShape(14.dp))
                 .border(
-                    width = if (focused) 3.dp else 1.dp,
-                    color = if (focused) VpCyan else VpBorder,
+                    width = if (focused) 4.dp else 1.dp,
+                    color = if (focused) Color.White else VpBorder,
                     shape = RoundedCornerShape(14.dp)
                 )
                 .background(VpPanel)
@@ -231,17 +231,17 @@ fun LiveRow(
     )
 
     val container = when {
-        focused -> VpPanelAlt
-        selected -> VpGreen.copy(alpha = 0.10f)
+        focused -> VpCyan.copy(alpha = 0.22f)
+        selected -> VpGreen.copy(alpha = 0.12f)
         else -> VpPanel
     }
     val borderColor = when {
-        focused -> VpCyan
+        focused -> Color.White
         selected -> VpGreen
         else -> VpBorder
     }
     val borderWidth = when {
-        focused -> 3.dp
+        focused -> 4.dp
         selected -> 2.dp
         else -> 1.dp
     }

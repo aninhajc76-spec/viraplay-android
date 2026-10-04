@@ -31,6 +31,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -45,6 +46,23 @@ private val screenModes = listOf(
     ScreenMode("Zoom", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
     ScreenMode("Preencher", AspectRatioFrameLayout.RESIZE_MODE_FILL)
 )
+
+
+@Composable
+private fun TvPlayerControl(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FocusTile(
+        onClick = onClick,
+        modifier = modifier.height(44.dp).widthIn(min = 105.dp, max = 190.dp)
+    ) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
+        }
+    }
+}
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -68,6 +86,7 @@ fun PlayerScreen(
     var rotationIndex by remember(item.itemKey) { mutableIntStateOf(0) }
     var screenModeIndex by remember(item.itemKey) { mutableIntStateOf(0) }
     var controlsVisible by remember(item.itemKey) { mutableStateOf(true) }
+    var isPlaying by remember(item.itemKey) { mutableStateOf(true) }
     var autoQuality by remember(item.itemKey) { mutableStateOf(prefs.autoQuality) }
     var qualityLabelState by remember(item.itemKey) {
         mutableStateOf(qualityLabel(item.name))
@@ -84,15 +103,23 @@ fun PlayerScreen(
     val controlsFocus = remember { FocusRequester() }
 
     val player = remember(item.itemKey) {
-        ExoPlayer.Builder(context).build().apply {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context, renderersFactory).build().apply {
             addListener(object : Player.Listener {
                 override fun onPlayerError(playbackException: PlaybackException) {
                     val raw = playbackException.message ?: "Falha na fonte de vídeo"
                     error = when {
                         raw.contains("403", true) || raw.contains("401", true) ->
                             "O servidor recusou esta reprodução. Verifique se a conta já está em uso em outro aparelho."
-                        else -> raw
+                        raw.contains("MediaCodec", true) || raw.contains("VideoRenderer", true) || raw.contains("Decoder", true) ->
+                            "Esta TV não conseguiu decodificar este vídeo. O ViraPlay tentou um decodificador alternativo; tente novamente ou escolha outra fonte/qualidade."
+                        else -> "Não foi possível reproduzir este conteúdo nesta TV. Tente novamente."
                     }
+                }
+
+                override fun onIsPlayingChanged(value: Boolean) {
+                    isPlaying = value
                 }
             })
             setMediaItem(MediaItem.fromUri(currentUrl))
@@ -253,11 +280,13 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controlsVisible, isTv) {
+    LaunchedEffect(controlsVisible, isTv, currentItem.itemKey) {
         if (!isTv) return@LaunchedEffect
-        delay(60)
+        delay(80)
         if (controlsVisible) {
             runCatching { controlsFocus.requestFocus() }
+            delay(7_000)
+            controlsVisible = false
         } else {
             runCatching { videoFocus.requestFocus() }
         }
@@ -271,7 +300,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(currentItem.itemKey, autoQuality) {
-        if (currentItem.type == ContentType.LIVE && autoQuality) {
+        if (currentItem.type == ContentType.LIVE && autoQuality && !isTv) {
             delay(4_000)
             while (true) {
                 applyAutomaticQuality()
@@ -351,7 +380,6 @@ fun PlayerScreen(
                         event.key == Key.NumPadEnter
 
                     if (!controlsVisible && navigationKey) {
-                        playerViewRef?.showController()
                         controlsVisible = true
                         true
                     } else {
@@ -365,17 +393,23 @@ fun PlayerScreen(
                     PlayerView(ctx).apply {
                         playerViewRef = this
                         this.player = player
-                        useController = true
+                        useController = !isTv
                         controllerShowTimeoutMs = 4_000
-                        controllerAutoShow = true
+                        controllerAutoShow = !isTv
+                        if (isTv) {
+                            isFocusable = false
+                            isFocusableInTouchMode = false
+                        }
                         keepScreenOn = true
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         resizeMode = screenModes[screenModeIndex].resizeMode
-                        setControllerVisibilityListener(
-                            PlayerView.ControllerVisibilityListener { visibility ->
-                                controlsVisible = visibility == View.VISIBLE
-                            }
-                        )
+                        if (!isTv) {
+                            setControllerVisibilityListener(
+                                PlayerView.ControllerVisibilityListener { visibility ->
+                                    controlsVisible = visibility == View.VISIBLE
+                                }
+                            )
+                        }
                     }
                 },
                 update = { view ->
@@ -391,25 +425,29 @@ fun PlayerScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 Surface(
-                    color = Color.Black.copy(alpha = 0.72f),
-                    shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(
-                                onClick = {
-                                    persistProgress()
-                                    onBack()
-                                },
-                                modifier = Modifier.focusRequester(controlsFocus)
-                            ) {
-                                Text("Voltar")
+                            if (isTv) {
+                                TvPlayerControl(
+                                    label = "Voltar",
+                                    onClick = { persistProgress(); onBack() },
+                                    modifier = Modifier.focusRequester(controlsFocus)
+                                )
+                            } else {
+                                TextButton(
+                                    onClick = { persistProgress(); onBack() },
+                                    modifier = Modifier.focusRequester(controlsFocus)
+                                ) { Text("Voltar") }
                             }
 
+                            Spacer(Modifier.width(10.dp))
                             Text(
                                 channelBaseName(currentItem.name),
                                 color = Color.White,
@@ -424,51 +462,47 @@ fun PlayerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (!isTv) {
-                                AssistChip(
-                                    onClick = ::rotate,
-                                    label = { Text("Girar", fontSize = 11.sp) }
-                                )
-                            }
-
-                            AssistChip(
-                                onClick = {
+                            if (isTv) {
+                                if (currentItem.type != ContentType.LIVE) {
+                                    TvPlayerControl("-10 s", { player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L)) })
+                                }
+                                TvPlayerControl(if (isPlaying) "Pausar" else "Reproduzir", {
+                                    if (player.isPlaying) player.pause() else player.play()
+                                    controlsVisible = true
+                                })
+                                if (currentItem.type != ContentType.LIVE) {
+                                    TvPlayerControl("+10 s", {
+                                        val duration = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                        player.seekTo((player.currentPosition + 10_000L).coerceAtMost(duration))
+                                    })
+                                }
+                                TvPlayerControl("Tela: ${screenModes[screenModeIndex].label}", {
                                     screenModeIndex = (screenModeIndex + 1) % screenModes.size
-                                },
-                                label = {
-                                    Text(
-                                        "Tela: ${screenModes[screenModeIndex].label}",
-                                        fontSize = 11.sp
+                                    controlsVisible = true
+                                })
+                                if (currentItem.type == ContentType.LIVE) {
+                                    TvPlayerControl(
+                                        if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState",
+                                        { cycleQuality(); controlsVisible = true }
+                                    )
+                                    TvPlayerControl("Canal anterior", { changeLive(false); controlsVisible = true })
+                                    TvPlayerControl("Próximo canal", { changeLive(true); controlsVisible = true })
+                                }
+                            } else {
+                                AssistChip(onClick = ::rotate, label = { Text("Girar", fontSize = 11.sp) })
+                                AssistChip(
+                                    onClick = { screenModeIndex = (screenModeIndex + 1) % screenModes.size },
+                                    label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
+                                )
+                                if (currentItem.type == ContentType.LIVE) {
+                                    AssistChip(
+                                        onClick = ::cycleQuality,
+                                        label = { Text(if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState", fontSize = 11.sp) }
                                     )
                                 }
-                            )
-
-                            if (currentItem.type == ContentType.LIVE) {
-                                AssistChip(
-                                    onClick = ::cycleQuality,
-                                    label = {
-                                        Text(
-                                            if (autoQuality) {
-                                                "Qualidade: AUTO"
-                                            } else {
-                                                "Qualidade: $qualityLabelState"
-                                            },
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                )
-
-                                AssistChip(
-                                    onClick = { changeLive(false) },
-                                    label = { Text("‹ Canal", fontSize = 11.sp) }
-                                )
-                                AssistChip(
-                                    onClick = { changeLive(true) },
-                                    label = { Text("Canal ›", fontSize = 11.sp) }
-                                )
                             }
                         }
                     }
