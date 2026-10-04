@@ -37,7 +37,7 @@ private val Danger = Color(0xFFFF5E78)
 private val Muted = Color(0xFF98A3B8)
 
 private enum class Tab(val label: String) {
-    DASHBOARD("Painel"), PENDING("Pendentes"), CLIENTS("Clientes")
+    DASHBOARD("Painel"), PENDING("Pendentes"), CLIENTS("Clientes"), UPDATES("Atualizações")
 }
 
 private enum class ClientFilter(val label: String) {
@@ -134,7 +134,9 @@ private fun Login(token: String, onToken: (String) -> Unit, onLogin: () -> Unit)
 
 @Composable
 private fun Dashboard(token: String, onLogout: () -> Unit) {
+    val context = LocalContext.current
     val repo = remember { AdminRepository() }
+    val updateManager = remember { AdminUpdateManager(context) }
     val scope = rememberCoroutineScope()
     var devices by remember { mutableStateOf<List<AdminDevice>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
@@ -143,6 +145,12 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     var activating by remember { mutableStateOf<AdminDevice?>(null) }
     var editing by remember { mutableStateOf<AdminDevice?>(null) }
     var firstLoad by remember { mutableStateOf(true) }
+    var updateInfo by remember { mutableStateOf<AdminUpdateInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    var lastUpdateCheck by remember { mutableStateOf("Ainda não verificado") }
 
     suspend fun load() {
         try {
@@ -166,6 +174,38 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
         while (true) {
             delay(20_000)
             load()
+        }
+    }
+
+    suspend fun checkForUpdate(showNoUpdate: Boolean = false) {
+        checkingUpdate = true
+        updateError = null
+        try {
+            val found = withContext(Dispatchers.IO) { updateManager.check() }
+            updateInfo = found
+            if (found != null) showUpdateDialog = true
+            lastUpdateCheck = if (found != null) {
+                "Nova versão ${found.versionName} disponível"
+            } else {
+                "ViraPlay ADM ${BuildConfig.VERSION_NAME} está atualizado"
+            }
+            if (showNoUpdate && found == null) {
+                updateError = "Nenhuma atualização disponível no momento."
+            }
+        } catch (e: Throwable) {
+            updateError = (e.message ?: "Não foi possível verificar atualizações.").take(120)
+            lastUpdateCheck = "Falha ao verificar"
+        } finally {
+            checkingUpdate = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(2_000)
+        checkForUpdate(false)
+        while (true) {
+            delay(30L * 60L * 1000L)
+            checkForUpdate(false)
         }
     }
 
@@ -212,6 +252,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                                     Tab.DASHBOARD -> "ADM"
                                     Tab.PENDING -> pending.size.toString()
                                     Tab.CLIENTS -> clients.size.toString()
+                                    Tab.UPDATES -> if (updateInfo != null) "NOVO" else "UPD"
                                 },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -241,12 +282,95 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     onSearch = { search = it },
                     onOpen = { editing = it }
                 )
+                Tab.UPDATES -> UpdatesTab(
+                    info = updateInfo,
+                    checking = checkingUpdate,
+                    busy = updateBusy,
+                    lastCheck = lastUpdateCheck,
+                    error = updateError,
+                    onCheck = { scope.launch { checkForUpdate(true) } },
+                    onInstall = { info ->
+                        updateBusy = true
+                        updateError = null
+                        scope.launch {
+                            val file = withContext(Dispatchers.IO) {
+                                runCatching { updateManager.download(info) }
+                            }
+                            file.onSuccess { apk ->
+                                updateBusy = false
+                                when (updateManager.launchInstaller(apk)) {
+                                    AdminInstallLaunchResult.STARTED -> Unit
+                                    AdminInstallLaunchResult.NEED_PERMISSION ->
+                                        updateError = "Autorize a instalação e toque em Instalar novamente."
+                                }
+                            }.onFailure { e ->
+                                updateBusy = false
+                                updateError = e.message ?: "Não foi possível baixar a atualização."
+                            }
+                        }
+                    }
+                )
             }
 
             if (firstLoad) {
                 CircularProgressIndicator(color = Cyan, modifier = Modifier.align(Alignment.Center))
             }
         }
+    }
+
+    if (showUpdateDialog) updateInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { if (!info.mandatory && !updateBusy) showUpdateDialog = false },
+            title = { Text("Atualização do ViraPlay ADM") },
+            text = {
+                Column {
+                    Text("Versão ${info.versionName} disponível.", color = Color.White, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(info.message, color = Muted)
+                    if (info.mandatory) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Atualização obrigatória.", color = Cyan, fontWeight = FontWeight.Bold)
+                    }
+                    if (updateBusy) {
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Baixando atualização...", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                    }
+                    updateError?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = Danger, fontSize = 11.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !updateBusy,
+                    onClick = {
+                        updateBusy = true
+                        updateError = null
+                        scope.launch {
+                            val file = withContext(Dispatchers.IO) { runCatching { updateManager.download(info) } }
+                            file.onSuccess { apk ->
+                                updateBusy = false
+                                when (updateManager.launchInstaller(apk)) {
+                                    AdminInstallLaunchResult.STARTED -> Unit
+                                    AdminInstallLaunchResult.NEED_PERMISSION ->
+                                        updateError = "Autorize a instalação e toque em Atualizar novamente."
+                                }
+                            }.onFailure { e ->
+                                updateBusy = false
+                                updateError = e.message ?: "Não foi possível baixar a atualização."
+                            }
+                        }
+                    }
+                ) { Text("Atualizar agora") }
+            },
+            dismissButton = {
+                if (!info.mandatory) {
+                    TextButton(enabled = !updateBusy, onClick = { showUpdateDialog = false }) { Text("Depois") }
+                }
+            }
+        )
     }
 
     activating?.let { device ->
@@ -274,6 +398,72 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                 reload()
             }
         )
+    }
+}
+
+@Composable
+private fun UpdatesTab(
+    info: AdminUpdateInfo?,
+    checking: Boolean,
+    busy: Boolean,
+    lastCheck: String,
+    error: String?,
+    onCheck: () -> Unit,
+    onInstall: (AdminUpdateInfo) -> Unit
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Text("Atualizações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+            Text("O ViraPlay ADM também recebe novas versões sem precisar procurar APK manualmente.", color = Muted, fontSize = 12.sp)
+        }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Panel),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("Versão instalada", color = Muted, fontSize = 11.sp)
+                    Text("ViraPlay ADM ${BuildConfig.VERSION_NAME}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(lastCheck, color = if (info != null) Cyan else Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                    Button(
+                        onClick = onCheck,
+                        enabled = !checking && !busy,
+                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+                    ) {
+                        Text(if (checking) "Verificando..." else "Verificar agora")
+                    }
+                }
+            }
+        }
+        info?.let { update ->
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = 0.10f)),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Nova versão ${update.versionName}", color = Cyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(update.message, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        if (update.mandatory) {
+                            Text("Obrigatória", color = Danger, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                        }
+                        Button(
+                            onClick = { onInstall(update) },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+                        ) {
+                            Text(if (busy) "Baixando..." else "Baixar e instalar")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

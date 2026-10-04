@@ -4,5 +4,11 @@
   "mandatory": false,
   "message": "ViraPlay 3.3 Beta - TV Performance.",
   "url": "",
-  "sha256": ""
+  "sha256": "",
+  "adminVersionCode": 33,
+  "adminVersionName": "3.3.0",
+  "adminMandatory": false,
+  "adminMessage": "ViraPlay ADM 3.3.",
+  "adminUrl": "",
+  "adminSha256": ""
 }

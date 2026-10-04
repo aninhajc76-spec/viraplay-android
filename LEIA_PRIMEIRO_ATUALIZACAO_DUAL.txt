@@ -1,0 +1,28 @@
+VIRAPLAY 3.3 - ATUALIZAÇÃO DUAL CLIENTE + ADM
+
+Este pacote adiciona atualização automática também ao ViraPlay ADM.
+
+O que entra:
+- nova aba "Atualizações" no ADM;
+- o ADM verifica novas versões sozinho;
+- quando existir atualização, mostra aviso mesmo sem abrir a aba;
+- botão "Baixar e instalar" no próprio ADM;
+- atualização por cima preservando dados, usando a mesma assinatura fixa;
+- manifesto preparado para Cliente e ADM ao mesmo tempo.
+
+IMPORTANTE:
+O importador atual ignora a pasta .github/workflows.
+Por isso o arquivo publish-update-DUAL.yml deve substituir manualmente:
+.github/workflows/publish-update.yml
+
+Depois desta alteração:
+1. importe este ZIP;
+2. substitua publish-update.yml pelo publish-update-DUAL.yml;
+3. rode Build ViraPlay APKs novamente;
+4. só depois teste Cliente e ADM.
+
+A publicação de uma versão futura passará a publicar DOIS APKs:
+- ViraPlay-x.x.x.apk
+- ViraPlay-ADM-x.x.x.apk
+
+E os dois aplicativos receberão aviso de atualização.
