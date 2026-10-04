@@ -1,0 +1,35 @@
+ViraPlay 3.3.4 PREMIUM FINAL - TV + CELULAR
+versionCode: 37
+versionName: 3.3.4
+
+Pacote focado em fechar os problemas visuais e de navegação encontrados na TV sem regredir o celular.
+
+CORREÇÕES DA TV
+- splash/tela inicial em preto real para eliminar clarão/cinza;
+- PlayerView e prévia com fundo/shutter preto para evitar imagem lavada/cinza;
+- barra de progresso de filmes e séries com tempo atual e duração total;
+- -10s / +10s mantidos no VOD;
+- ajuste de tela reforçado: Ajustar / Zoom / Preencher aplica diretamente no PlayerView, força relayout e atualização;
+- posição da categoria/canal ao vivo preservada ao abrir um canal e voltar;
+- canal selecionado é recuperado no retorno em vez de subir ao início;
+- QR Code de suporte restaurado, apontando direto para o WhatsApp com o código do aparelho;
+- tela de suporte redesenhada para TV e celular;
+- foco TV refinado com acabamento azul/ciano e elevação;
+- Home TV redesenhada com bloco Ao Vivo e cards com acabamento premium;
+- fundo e navegação visual refinados;
+- ícone do launcher ganhou área segura para não ficar cortado dentro da máscara da TV.
+
+CELULAR
+- base funcional preservada;
+- fundo e cards principais receberam acabamento visual mais profissional;
+- player mantém controles nativos no celular;
+- suporte também ganha QR Code e botão direto para WhatsApp.
+
+PUBLICAÇÃO
+1. Envie este ZIP na raiz do repositório viraplay-android.
+2. Rode: Importar projeto ViraPlay.
+3. Primeiro gere/teste a build antes de publicar para todos.
+4. Na publicação use versionCode 37 e versionName 3.3.4.
+
+IMPORTANTE
+O pacote é incremental e foi feito para ser importado sobre a base atual 3.3.3 do repositório. O workflow de importação preserva .github/workflows.

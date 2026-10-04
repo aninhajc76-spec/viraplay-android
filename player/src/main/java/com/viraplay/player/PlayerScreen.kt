@@ -3,8 +3,10 @@ package com.viraplay.player
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.View
+import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -47,6 +49,16 @@ private val screenModes = listOf(
     ScreenMode("Preencher", AspectRatioFrameLayout.RESIZE_MODE_FILL)
 )
 
+private fun formatPlayerTime(ms: Long): String {
+    if (ms <= 0L) return "00:00"
+    val totalSeconds = ms / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
+    else "%02d:%02d".format(minutes, seconds)
+}
+
 
 @Composable
 private fun TvPlayerControl(
@@ -87,6 +99,8 @@ fun PlayerScreen(
     var screenModeIndex by remember(item.itemKey) { mutableIntStateOf(0) }
     var controlsVisible by remember(item.itemKey) { mutableStateOf(true) }
     var isPlaying by remember(item.itemKey) { mutableStateOf(true) }
+    var currentPositionMs by remember(item.itemKey) { mutableLongStateOf(0L) }
+    var durationMs by remember(item.itemKey) { mutableLongStateOf(0L) }
     var autoQuality by remember(item.itemKey) { mutableStateOf(prefs.autoQuality) }
     var qualityLabelState by remember(item.itemKey) {
         mutableStateOf(qualityLabel(item.name))
@@ -294,8 +308,10 @@ fun PlayerScreen(
 
     LaunchedEffect(currentItem.itemKey) {
         while (true) {
-            delay(5_000)
-            persistProgress()
+            currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+            durationMs = player.duration.takeIf { it > 0L } ?: 0L
+            if (currentItem.type != ContentType.LIVE) persistProgress()
+            delay(500)
         }
     }
 
@@ -401,6 +417,10 @@ fun PlayerScreen(
                             isFocusableInTouchMode = false
                         }
                         keepScreenOn = true
+                        setBackgroundColor(AndroidColor.BLACK)
+                        setShutterBackgroundColor(AndroidColor.BLACK)
+                        setKeepContentOnPlayerReset(true)
+                        alpha = 1f
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         resizeMode = screenModes[screenModeIndex].resizeMode
                         if (!isTv) {
@@ -416,6 +436,8 @@ fun PlayerScreen(
                     playerViewRef = view
                     view.player = player
                     view.resizeMode = screenModes[screenModeIndex].resizeMode
+                    view.requestLayout()
+                    view.invalidate()
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -481,6 +503,11 @@ fun PlayerScreen(
                                 }
                                 TvPlayerControl("Tela: ${screenModes[screenModeIndex].label}", {
                                     screenModeIndex = (screenModeIndex + 1) % screenModes.size
+                                    playerViewRef?.let { pv ->
+                                        pv.resizeMode = screenModes[screenModeIndex].resizeMode
+                                        pv.requestLayout()
+                                        pv.invalidate()
+                                    }
                                     controlsVisible = true
                                 })
                                 if (currentItem.type == ContentType.LIVE) {
@@ -494,7 +521,14 @@ fun PlayerScreen(
                             } else {
                                 AssistChip(onClick = ::rotate, label = { Text("Girar", fontSize = 11.sp) })
                                 AssistChip(
-                                    onClick = { screenModeIndex = (screenModeIndex + 1) % screenModes.size },
+                                    onClick = {
+                                        screenModeIndex = (screenModeIndex + 1) % screenModes.size
+                                        playerViewRef?.let { pv ->
+                                            pv.resizeMode = screenModes[screenModeIndex].resizeMode
+                                            pv.requestLayout()
+                                            pv.invalidate()
+                                        }
+                                    },
                                     label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
                                 )
                                 if (currentItem.type == ContentType.LIVE) {
@@ -503,6 +537,33 @@ fun PlayerScreen(
                                         label = { Text(if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState", fontSize = 11.sp) }
                                     )
                                 }
+                            }
+                        }
+
+                        if (currentItem.type != ContentType.LIVE) {
+                            val fraction = if (durationMs > 0L) {
+                                (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(formatPlayerTime(currentPositionMs), color = Color.White, fontSize = 11.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(7.dp)
+                                        .background(VpSoft, RoundedCornerShape(50))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(fraction)
+                                            .background(VpCyan, RoundedCornerShape(50))
+                                    )
+                                }
+                                Text(formatPlayerTime(durationMs), color = VpMuted, fontSize = 11.sp)
                             }
                         }
                     }

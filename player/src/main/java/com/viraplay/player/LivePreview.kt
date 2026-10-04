@@ -1,5 +1,6 @@
 package com.viraplay.player
 
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
@@ -38,7 +39,6 @@ fun LivePreviewPlayer(
         val url = item.url
         if (url.isNullOrBlank()) return@LaunchedEffect
 
-        // Debounce: ao navegar rápido pelo controle, não abre um stream novo para cada foco.
         delay(850)
 
         player.setMediaItem(MediaItem.fromUri(url))
@@ -62,6 +62,10 @@ fun LivePreviewPlayer(
                 this.player = player
                 useController = false
                 keepScreenOn = true
+                setBackgroundColor(AndroidColor.BLACK)
+                setShutterBackgroundColor(AndroidColor.BLACK)
+                setKeepContentOnPlayerReset(true)
+                alpha = 1f
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
             }
@@ -69,7 +73,9 @@ fun LivePreviewPlayer(
         update = { view ->
             view.player = player
             view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            view.setBackgroundColor(AndroidColor.BLACK)
+            view.requestLayout()
         },
-        modifier = modifier
+        modifier = modifier.background(Color.Black)
     )
 }

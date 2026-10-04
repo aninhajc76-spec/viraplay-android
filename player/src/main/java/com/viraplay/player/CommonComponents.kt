@@ -89,9 +89,11 @@ fun FocusTile(
     )
 
     Surface(
-        color = if (focused) VpCyan.copy(alpha = 0.20f) else VpPanel,
-        border = BorderStroke(if (focused) 4.dp else 1.dp, if (focused) Color.White else VpBorder),
-        shape = RoundedCornerShape(18.dp),
+        color = if (focused) Color(0xFF0D3359) else Color(0xFF071A34),
+        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) VpCyan else VpBorder.copy(alpha = 0.75f)),
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = if (focused) 8.dp else 2.dp,
+        shadowElevation = if (focused) 10.dp else 1.dp,
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale

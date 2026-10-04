@@ -4,8 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 36
-val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.3"
+val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 37
+val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.4"
 
 android {
     namespace = "com.viraplay.player"
@@ -80,4 +80,5 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.11.1")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.google.zxing:core:3.5.3")
 }

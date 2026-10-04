@@ -1,6 +1,8 @@
 package com.viraplay.player
 
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -15,15 +17,37 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.MultiFormatWriter
 import com.viraplay.shared.SupportConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+
+private fun createSupportQrBitmap(content: String, size: Int = 360): Bitmap? = runCatching {
+    val matrix = MultiFormatWriter().encode(
+        content,
+        BarcodeFormat.QR_CODE,
+        size,
+        size,
+        mapOf(EncodeHintType.MARGIN to 1)
+    )
+    Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+            }
+        }
+    }
+}.getOrNull()
 
 @Composable
 fun ActivationScreen(
@@ -105,36 +129,74 @@ fun BlockedScreen(code: String, onSupport: () -> Unit, onRefresh: () -> Unit) {
 fun SupportScreen(code: String, isTv: Boolean, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
+    val qrBitmap = remember(code) { createSupportQrBitmap(SupportConfig.whatsappUrl(code)) }
+
     Surface(color = VpBg, modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.padding(if (isTv) 42.dp else 24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.radialGradient(listOf(Color(0xFF0B2B4B), VpBg)))
+                .padding(if (isTv) 38.dp else 22.dp),
+            contentAlignment = Alignment.Center
         ) {
-            BrandWordmark(large = true)
-            Spacer(Modifier.height(22.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = VpPanel),
-                shape = RoundedCornerShape(22.dp),
-                modifier = Modifier.widthIn(max = 620.dp).fillMaxWidth()
-            ) {
-                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Suporte ViraPlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-                    Spacer(Modifier.height(10.dp))
-                    Text("WhatsApp", color = VpCyan, fontWeight = FontWeight.SemiBold)
-                    Text(SupportConfig.WHATSAPP_DISPLAY, color = Color.White, fontSize = 22.sp)
-                    Spacer(Modifier.height(10.dp))
-                    Text("Código deste aparelho: $code", color = VpMuted)
-                    Spacer(Modifier.height(18.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                BrandWordmark(large = true)
+                Spacer(Modifier.height(18.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF071A34)),
+                    border = BorderStroke(1.dp, VpCyan.copy(alpha = 0.35f)),
+                    shape = RoundedCornerShape(26.dp),
+                    modifier = Modifier.widthIn(max = if (isTv) 820.dp else 620.dp).fillMaxWidth()
+                ) {
                     if (isTv) {
-                        Text("Abra o WhatsApp no celular e envie seu código para o número acima.", color = VpMuted, fontSize = 14.sp)
+                        Row(
+                            Modifier.fillMaxWidth().padding(24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(26.dp)
+                        ) {
+                            qrBitmap?.let { bmp ->
+                                Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+                                    Image(
+                                        bitmap = bmp.asImageBitmap(),
+                                        contentDescription = "QR Code do suporte",
+                                        modifier = Modifier.size(210.dp).padding(10.dp)
+                                    )
+                                }
+                            }
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                                Text("Suporte ViraPlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Aponte a câmera do celular para o QR Code", color = VpCyan, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(14.dp))
+                                Text("WhatsApp", color = VpMuted, fontSize = 12.sp)
+                                Text(SupportConfig.WHATSAPP_DISPLAY, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(12.dp))
+                                Text("Código do aparelho", color = VpMuted, fontSize = 12.sp)
+                                Surface(color = VpPanelAlt, shape = RoundedCornerShape(12.dp)) {
+                                    Text(code, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = 2.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
+                                }
+                                Spacer(Modifier.height(18.dp))
+                                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
+                            }
+                        }
                     } else {
-                        Button(onClick = { Support.openWhatsApp(context, code) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Abrir WhatsApp")
+                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Suporte ViraPlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                            Spacer(Modifier.height(12.dp))
+                            qrBitmap?.let { bmp ->
+                                Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+                                    Image(bitmap = bmp.asImageBitmap(), contentDescription = "QR Code do suporte", modifier = Modifier.size(190.dp).padding(10.dp))
+                                }
+                                Spacer(Modifier.height(12.dp))
+                            }
+                            Text(SupportConfig.WHATSAPP_DISPLAY, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("Código: $code", color = VpMuted)
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = { Support.openWhatsApp(context, code) }, modifier = Modifier.fillMaxWidth()) { Text("Abrir WhatsApp") }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
                 }
             }
         }

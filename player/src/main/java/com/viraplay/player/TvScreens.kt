@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -45,6 +46,15 @@ private data class TvVodLoad(
     val continueWatching: Int,
     val items: List<CatalogItem>
 )
+
+private object TvLiveSession {
+    var categoryId: String = "ALL"
+    var channelKey: String? = null
+    var categoryIndex: Int = 0
+    var categoryOffset: Int = 0
+    var channelIndex: Int = 0
+    var channelOffset: Int = 0
+}
 
 @Composable
 fun TvShell(
@@ -93,7 +103,11 @@ fun TvShell(
 
     BackHandler { onSection(MainSection.HOME) }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(VpBg, Color(0xFF06152C), VpBg))
+        )
+    ) {
         TvTopNav(section, onSection, { onSection(MainSection.HOME) }, onSupport, onSettings, onRefresh)
         when (section) {
             MainSection.LIVE -> TvLive(
@@ -174,6 +188,12 @@ private fun TvHome(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         BrandWordmark(large = true)
+        Text(
+            "Filmes, séries e TV ao vivo em um só lugar",
+            color = VpMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 2.dp)
+        )
 
         accessNotice?.let {
             Spacer(Modifier.height(8.dp))
@@ -203,11 +223,23 @@ private fun TvHome(
                     .fillMaxHeight()
                     .focusRequester(firstFocus)
             ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TV", color = VpCyan, fontSize = 58.sp, fontWeight = FontWeight.Black)
-                        Text("Ao Vivo", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("${counts.live} canais", color = VpMuted, fontSize = 12.sp)
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.linearGradient(listOf(Color(0xFF0A4770), Color(0xFF09203C), Color(0xFF151337)))
+                    )
+                ) {
+                    Column(
+                        Modifier.fillMaxSize().padding(26.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Surface(color = VpCyan.copy(alpha = 0.16f), shape = RoundedCornerShape(50)) {
+                            Text("●  AO VIVO", color = VpCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        }
+                        Column {
+                            Text("TV", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Black)
+                            Text("Canais ao vivo", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                            Text("${counts.live} canais disponíveis", color = VpMuted, fontSize = 12.sp)
+                        }
                     }
                 }
             }
@@ -254,7 +286,7 @@ private fun TvHome(
                 Spacer(Modifier.width(20.dp))
                 Text(status, color = VpMuted)
                 Spacer(Modifier.weight(1f))
-                Text("TV Performance", color = VpMuted, fontSize = 11.sp)
+                Text("Experiência TV • ViraPlay", color = VpMuted, fontSize = 11.sp)
             }
         }
     }
@@ -268,8 +300,15 @@ private fun HomeTile(
     onClick: () -> Unit
 ) {
     FocusTile(onClick = onClick, modifier = modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.CenterStart) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.linearGradient(listOf(Color(0xFF0A203C), Color(0xFF08162C), VpPurple.copy(alpha = 0.10f)))
+            ).padding(20.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
             Column {
+                Box(Modifier.width(34.dp).height(3.dp).background(VpCyan, RoundedCornerShape(50)))
+                Spacer(Modifier.height(10.dp))
                 Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
                 Text(subtitle, color = VpMuted, fontSize = 12.sp)
@@ -382,7 +421,7 @@ private fun TvLive(
     val prefs = remember { PlaybackPreferences(context) }
 
     var categories by remember { mutableStateOf<List<CategoryEntry>>(emptyList()) }
-    var selectedCategory by remember { mutableStateOf("ALL") }
+    var selectedCategory by remember { mutableStateOf(TvLiveSession.categoryId) }
     var search by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var rawItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
@@ -391,6 +430,23 @@ private fun TvLive(
     var epg by remember { mutableStateOf<List<EpgProgram>>(emptyList()) }
     var totalCount by remember { mutableIntStateOf(db.count(ContentType.LIVE)) }
     var limit by remember(selectedCategory, search) { mutableIntStateOf(700) }
+    val categoryListState = rememberLazyListState(TvLiveSession.categoryIndex, TvLiveSession.categoryOffset)
+    val channelListState = rememberLazyListState(TvLiveSession.channelIndex, TvLiveSession.channelOffset)
+
+    LaunchedEffect(categoryListState) {
+        snapshotFlow { categoryListState.firstVisibleItemIndex to categoryListState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                TvLiveSession.categoryIndex = index
+                TvLiveSession.categoryOffset = offset
+            }
+    }
+    LaunchedEffect(channelListState) {
+        snapshotFlow { channelListState.firstVisibleItemIndex to channelListState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                TvLiveSession.channelIndex = index
+                TvLiveSession.channelOffset = offset
+            }
+    }
 
     LaunchedEffect(selectedCategory, search, limit, catalogVersion, adultUnlocked, prefs.groupChannels) {
         val result = withContext(Dispatchers.IO) {
@@ -411,7 +467,10 @@ private fun TvLive(
         rawItems = result.third
 
         val shown = if (prefs.groupChannels) groupLiveItems(rawItems) else rawItems
-        if (selected == null || shown.none { it.itemKey == selected?.itemKey }) {
+        val saved = TvLiveSession.channelKey?.let { key -> shown.firstOrNull { it.itemKey == key } }
+        if (saved != null) {
+            selected = saved
+        } else if (selected == null || shown.none { it.itemKey == selected?.itemKey }) {
             selected = shown.firstOrNull()
             previewed = null
         }
@@ -419,6 +478,15 @@ private fun TvLive(
 
     val displayItems = remember(rawItems, prefs.groupChannels, catalogVersion) {
         if (prefs.groupChannels) groupLiveItems(rawItems) else rawItems
+    }
+
+    LaunchedEffect(displayItems, selectedCategory) {
+        val savedKey = TvLiveSession.channelKey
+        val index = if (savedKey == null) -1 else displayItems.indexOfFirst { it.itemKey == savedKey }
+        if (index >= 0) {
+            selected = displayItems[index]
+            runCatching { channelListState.scrollToItem(index, TvLiveSession.channelOffset) }
+        }
     }
 
     LaunchedEffect(selected?.itemKey) {
@@ -457,15 +525,23 @@ private fun TvLive(
                 Spacer(Modifier.height(8.dp))
             }
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(state = categoryListState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item {
                     CategoryButton("Todos", totalCount, selectedCategory == "ALL") {
                         selectedCategory = "ALL"
+                        TvLiveSession.categoryId = "ALL"
+                        TvLiveSession.channelKey = null
+                        TvLiveSession.channelIndex = 0
+                        TvLiveSession.channelOffset = 0
                     }
                 }
                 items(categories, key = { it.id }) { c ->
                     CategoryButton(c.name, c.count, selectedCategory == c.id) {
                         selectedCategory = c.id
+                        TvLiveSession.categoryId = c.id
+                        TvLiveSession.channelKey = null
+                        TvLiveSession.channelIndex = 0
+                        TvLiveSession.channelOffset = 0
                     }
                 }
             }
@@ -474,6 +550,7 @@ private fun TvLive(
         Spacer(Modifier.width(12.dp))
 
         LazyColumn(
+            state = channelListState,
             modifier = Modifier.weight(1.1f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
@@ -483,6 +560,7 @@ private fun TvLive(
                     selected = selected?.itemKey == item.itemKey,
                     onClick = {
                         selected = item
+                        TvLiveSession.channelKey = item.itemKey
                         if (previewed?.itemKey == item.itemKey) {
                             onOpen(item)
                         } else {
@@ -493,7 +571,7 @@ private fun TvLive(
                         db.toggleFavorite(item.itemKey)
                         onChanged()
                     },
-                    onFocused = { selected = item }
+                    onFocused = { selected = item; TvLiveSession.channelKey = item.itemKey }
                 )
             }
 

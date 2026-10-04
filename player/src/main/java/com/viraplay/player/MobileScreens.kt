@@ -100,7 +100,12 @@ fun MobileShell(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(Brush.verticalGradient(listOf(VpBg, Color(0xFF041126), VpBg)))
+        ) {
             when (section) {
                 MainSection.HOME -> MobileHome(db, catalogVersion, accessNotice, adultUnlocked, onOpen, onSection, onSupport, onChanged)
                 MainSection.LIVE -> MobileLibrary(db, repository, ContentType.LIVE, catalogVersion, adultUnlocked, onOpen, onChanged)
@@ -189,8 +194,8 @@ private fun MobileHome(
 private fun HomeQuick(label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp), modifier = modifier) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(92.dp).background(
-                Brush.linearGradient(listOf(VpPanelAlt, VpPanel, VpPurple.copy(alpha = 0.14f)))
+            modifier = Modifier.fillMaxWidth().height(98.dp).background(
+                Brush.linearGradient(listOf(Color(0xFF0A3157), VpPanel, VpPurple.copy(alpha = 0.18f)))
             )
         ) {
             TextButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
