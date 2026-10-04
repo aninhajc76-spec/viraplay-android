@@ -18,6 +18,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.viraplay.shared.SupportConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ActivationScreen(
@@ -159,6 +162,66 @@ fun SettingsScreen(
     var newPin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
 
+    val updateManager = remember { UpdateManager(context) }
+    val updateScope = rememberCoroutineScope()
+    var manualUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var installingUpdate by remember { mutableStateOf(false) }
+    var updateStatus by remember {
+        mutableStateOf("Toque em Verificar agora para procurar uma nova versão.")
+    }
+    var updateError by remember { mutableStateOf<String?>(null) }
+
+    fun checkUpdateNow() {
+        if (checkingUpdate || installingUpdate) return
+        checkingUpdate = true
+        updateError = null
+        updateScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { updateManager.check() }
+            }
+            result.onSuccess { found ->
+                manualUpdate = found
+                updateStatus = if (found == null) {
+                    "Você já está na versão mais recente."
+                } else {
+                    "Nova versão ${found.versionName} disponível."
+                }
+            }.onFailure { e ->
+                updateError = (e.message ?: "Não foi possível verificar atualizações.").take(120)
+                updateStatus = "Falha ao verificar atualização."
+            }
+            checkingUpdate = false
+        }
+    }
+
+    fun installManualUpdate(info: AppUpdateInfo) {
+        if (installingUpdate) return
+        installingUpdate = true
+        updateError = null
+        updateStatus = "Baixando atualização..."
+        updateScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { updateManager.download(info) }
+            }
+            result.onSuccess { apk ->
+                installingUpdate = false
+                when (updateManager.launchInstaller(apk)) {
+                    InstallLaunchResult.STARTED -> {
+                        updateStatus = "Instalador aberto. Conclua a atualização do ViraPlay."
+                    }
+                    InstallLaunchResult.NEED_PERMISSION -> {
+                        updateStatus = "Autorize a instalação de apps desta fonte e volte para tentar novamente."
+                    }
+                }
+            }.onFailure { e ->
+                installingUpdate = false
+                updateError = (e.message ?: "Não foi possível baixar a atualização.").take(120)
+                updateStatus = "Falha ao baixar atualização."
+            }
+        }
+    }
+
     Surface(color = VpBg, modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -179,6 +242,50 @@ fun SettingsScreen(
             SettingsCard("Código do aparelho", code)
             accessText?.let { SettingsCard("Vencimento", it) }
             SettingsCard("Versão", "ViraPlay ${BuildConfig.VERSION_NAME}")
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = VpPanel),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                    Text("Atualizações", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Versão instalada: ${BuildConfig.VERSION_NAME}",
+                        color = VpMuted,
+                        fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        updateStatus,
+                        color = if (manualUpdate != null) VpCyan else VpMuted,
+                        fontSize = 12.sp
+                    )
+                    updateError?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(it, color = VpDanger, fontSize = 11.sp)
+                    }
+
+                    Button(
+                        onClick = { checkUpdateNow() },
+                        enabled = !checkingUpdate && !installingUpdate,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    ) {
+                        Text(if (checkingUpdate) "Verificando..." else "Verificar agora")
+                    }
+
+                    manualUpdate?.let { info ->
+                        OutlinedButton(
+                            onClick = { installManualUpdate(info) },
+                            enabled = !installingUpdate && !checkingUpdate,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        ) {
+                            Text(if (installingUpdate) "Baixando..." else "Baixar e instalar ${info.versionName}")
+                        }
+                    }
+                }
+            }
 
             ToggleCard(
                 title = "Agrupar canais",

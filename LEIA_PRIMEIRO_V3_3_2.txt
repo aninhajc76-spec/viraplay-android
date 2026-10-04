@@ -1,0 +1,17 @@
+ViraPlay 3.3.2 - correção do Cliente
+
+Incluído no Cliente:
+- a versão exibida nas Configurações agora vem automaticamente do aplicativo;
+- nova área "Atualizações" nas Configurações;
+- botão "Verificar agora";
+- aviso quando já está na versão mais recente;
+- botão "Baixar e instalar" quando houver nova versão;
+- se o usuário fechar o app durante uma tentativa, ele pode voltar nas Configurações e verificar de novo.
+
+ADM:
+- nenhuma mudança de interface ou funcionamento;
+- mantido estável porque a versão atual já está funcionando bem.
+
+Versão base desta correção:
+- versionCode 35
+- versionName 3.3.2
