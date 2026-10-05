@@ -1,0 +1,34 @@
+VPlayo 3.3.9 / versionCode 42 — revisão profissional do player
+
+Inclui todas as correções da 3.3.8 MASTER e acrescenta:
+
+PLAYER
+- modo imersivo real: oculta barra de status e navegação durante reprodução
+- PlayerView unificado com TextureView no celular e Android TV
+- remove sobreposição do controle nativo com o controle VPlayo
+- controles VPlayo agora funcionam no celular e TV
+- modos de tela: Ajustar, Tela cheia, Preencher e Zoom+
+- Zoom+ ajuda em conteúdos que chegam com barras pretas incorporadas no vídeo
+- barra de progresso interativa em filmes/séries
+- toque simples mostra/esconde controles
+- duplo toque avança 10 s em VOD
+- decoder fallback e preferência por renderer de extensão quando disponível
+
+ÁUDIO
+- seleção de áudio passa por DefaultTrackSelector
+- limita canais à capacidade real do aparelho quando possível
+- preferência inicial por português
+- volume é restaurado explicitamente na abertura
+- botão Áudio aparece quando existem múltiplas faixas compatíveis
+- permite alternar entre faixas de áudio e voltar para AUTO
+
+IMPORTANTE SOBRE CONTEÚDO SEM ÁUDIO:
+Se o servidor entregar somente uma faixa em codec que o aparelho não consegue decodificar,
+nenhum ajuste de interface cria um decoder que não existe no Android. Esta versão melhora
+a seleção/fallback quando existe faixa compatível alternativa. Casos restantes devem ser
+analisados pelo codec/stream específico antes de adicionar um decoder nativo grande.
+
+MASTER
+- MASTER sem créditos
+- aba Parceiros exclusiva do MASTER
+- correções de logo/splash incluídas

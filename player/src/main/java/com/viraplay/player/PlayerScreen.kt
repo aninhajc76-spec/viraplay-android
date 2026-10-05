@@ -2,7 +2,6 @@ package com.viraplay.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.view.View
 import android.view.LayoutInflater
 import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
@@ -10,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,26 +33,68 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.viraplay.shared.ContentType
 import kotlinx.coroutines.delay
 
-private data class ScreenMode(val label: String, val resizeMode: Int)
+private data class ScreenMode(
+    val label: String,
+    val resizeMode: Int,
+    val surfaceScale: Float = 1f
+)
+
+private data class AudioTrackChoice(
+    val group: Tracks.Group,
+    val trackIndex: Int,
+    val label: String
+)
 
 private val screenModes = listOf(
     ScreenMode("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-    ScreenMode("Zoom", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-    ScreenMode("Preencher", AspectRatioFrameLayout.RESIZE_MODE_FILL)
+    ScreenMode("Tela cheia", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    ScreenMode("Preencher", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+    ScreenMode("Zoom +", AspectRatioFrameLayout.RESIZE_MODE_ZOOM, 1.12f)
 )
+
+private fun audioChoices(tracks: Tracks): List<AudioTrackChoice> {
+    val result = mutableListOf<AudioTrackChoice>()
+    tracks.groups
+        .filter { it.type == C.TRACK_TYPE_AUDIO }
+        .forEach { group ->
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i)) continue
+                val format = group.getTrackFormat(i)
+                val language = format.language?.uppercase()?.takeIf { it.isNotBlank() }
+                val label = format.label?.takeIf { it.isNotBlank() }
+                    ?: language
+                    ?: format.sampleMimeType?.substringAfterLast('/')?.uppercase()
+                    ?: "Áudio ${result.size + 1}"
+                result += AudioTrackChoice(group, i, label)
+            }
+        }
+    return result
+}
+
+private fun selectedAudioLabel(tracks: Tracks): String {
+    val choices = audioChoices(tracks)
+    return choices.firstOrNull { it.group.isTrackSelected(it.trackIndex) }?.label ?: "AUTO"
+}
 
 private fun formatPlayerTime(ms: Long): String {
     if (ms <= 0L) return "00:00"
@@ -68,7 +111,11 @@ private fun applyPlayerScreenMode(player: ExoPlayer, view: PlayerView?, index: I
     val mode = screenModes[index.coerceIn(screenModes.indices)]
     view?.let { pv ->
         pv.resizeMode = mode.resizeMode
-        pv.videoSurfaceView?.requestLayout()
+        pv.videoSurfaceView?.let { surface ->
+            surface.scaleX = mode.surfaceScale
+            surface.scaleY = mode.surfaceScale
+            surface.requestLayout()
+        }
         pv.requestLayout()
         pv.invalidate()
     }
@@ -126,6 +173,8 @@ fun PlayerScreen(
     var qualityLabelState by remember(item.itemKey) {
         mutableStateOf(qualityLabel(item.name))
     }
+    var audioTrackCount by remember(item.itemKey) { mutableIntStateOf(0) }
+    var audioLabelState by remember(item.itemKey) { mutableStateOf("AUTO") }
     var variants by remember(item.itemKey) {
         mutableStateOf(
             if (item.type == ContentType.LIVE) db.liveVariants(item)
@@ -140,12 +189,22 @@ fun PlayerScreen(
     val player = remember(item.itemKey) {
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+
+        val trackSelector = DefaultTrackSelector(context).apply {
+            setParameters(
+                buildUponParameters()
+                    .setConstrainAudioChannelCountToDeviceCapabilities(true)
+            )
+        }
+
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
             .setAllowCrossProtocolRedirects(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setTrackSelector(trackSelector)
             .build()
             .apply {
             addListener(object : Player.Listener {
@@ -163,7 +222,26 @@ fun PlayerScreen(
                 override fun onIsPlayingChanged(value: Boolean) {
                     isPlaying = value
                 }
+
+                override fun onTracksChanged(tracks: Tracks) {
+                    audioTrackCount = audioChoices(tracks).size
+                    audioLabelState = selectedAudioLabel(tracks)
+                }
             })
+
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            volume = 1f
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setPreferredAudioLanguage("pt")
+                .build()
+
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
             if (startPosition > 0L && item.type != ContentType.LIVE) seekTo(startPosition)
@@ -267,6 +345,38 @@ fun PlayerScreen(
         }
     }
 
+    fun cycleAudio() {
+        val choices = audioChoices(player.currentTracks)
+        if (choices.isEmpty()) {
+            audioLabelState = "Sem faixa compatível"
+            return
+        }
+
+        val selectedIndex = choices.indexOfFirst { it.group.isTrackSelected(it.trackIndex) }
+        val nextIndex = if (selectedIndex < 0) 0 else selectedIndex + 1
+
+        if (nextIndex >= choices.size) {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setPreferredAudioLanguage("pt")
+                .build()
+            audioLabelState = "AUTO"
+        } else {
+            val choice = choices[nextIndex]
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setOverrideForType(
+                    TrackSelectionOverride(choice.group.mediaTrackGroup, choice.trackIndex)
+                )
+                .build()
+            audioLabelState = choice.label
+        }
+
+        player.volume = 1f
+        player.playWhenReady = true
+    }
+
     fun changeLive(next: Boolean) {
         if (currentItem.type != ContentType.LIVE) return
 
@@ -317,19 +427,27 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(Unit) {
+        activity?.let { act ->
+            WindowCompat.setDecorFitsSystemWindows(act.window, false)
+            WindowCompat.getInsetsController(act.window, act.window.decorView).apply {
+                hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+
         if (!isTv) {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
     }
 
     LaunchedEffect(controlsVisible, isTv, currentItem.itemKey) {
-        if (!isTv) return@LaunchedEffect
         delay(80)
         if (controlsVisible) {
-            runCatching { controlsFocus.requestFocus() }
+            if (isTv) runCatching { controlsFocus.requestFocus() }
             delay(5_500)
             controlsVisible = false
-        } else {
+        } else if (isTv) {
             runCatching { videoFocus.requestFocus() }
         }
     }
@@ -399,6 +517,11 @@ fun PlayerScreen(
         onDispose {
             persistProgress()
             player.release()
+            activity?.let { act ->
+                WindowCompat.setDecorFitsSystemWindows(act.window, true)
+                WindowCompat.getInsetsController(act.window, act.window.decorView)
+                    .show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            }
             if (!isTv) {
                 activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
@@ -410,6 +533,18 @@ fun PlayerScreen(
             Modifier
                 .fillMaxSize()
                 .focusRequester(videoFocus)
+                .pointerInput(currentItem.itemKey) {
+                    detectTapGestures(
+                        onTap = { controlsVisible = !controlsVisible },
+                        onDoubleTap = {
+                            if (currentItem.type != ContentType.LIVE) {
+                                player.seekTo((player.currentPosition + 10_000L).coerceAtMost(
+                                    player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                ))
+                            }
+                        }
+                    )
+                }
                 .onPreviewKeyEvent { event ->
                     if (!isTv || event.type != KeyEventType.KeyDown) {
                         return@onPreviewKeyEvent false
@@ -434,21 +569,18 @@ fun PlayerScreen(
         ) {
             AndroidView(
                 factory = { ctx ->
-                    val view = if (isTv) {
-                        LayoutInflater.from(ctx).inflate(
-                            R.layout.player_view_tv,
-                            null,
-                            false
-                        ) as PlayerView
-                    } else {
-                        PlayerView(ctx)
-                    }
+                    val view = LayoutInflater.from(ctx).inflate(
+                        R.layout.player_view_tv,
+                        null,
+                        false
+                    ) as PlayerView
+
                     view.apply {
                         playerViewRef = this
                         this.player = player
-                        useController = !isTv
-                        controllerShowTimeoutMs = 4_000
-                        controllerAutoShow = !isTv
+                        useController = false
+                        controllerShowTimeoutMs = 0
+                        controllerAutoShow = false
                         if (isTv) {
                             isFocusable = false
                             isFocusableInTouchMode = false
@@ -460,13 +592,6 @@ fun PlayerScreen(
                         alpha = 1f
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         applyPlayerScreenMode(player, this, screenModeIndex)
-                        if (!isTv) {
-                            setControllerVisibilityListener(
-                                PlayerView.ControllerVisibilityListener { visibility ->
-                                    controlsVisible = visibility == View.VISIBLE
-                                }
-                            )
-                        }
                     }
                 },
                 update = { view ->
@@ -479,7 +604,7 @@ fun PlayerScreen(
 
             AnimatedVisibility(
                 visible = controlsVisible,
-                modifier = Modifier.align(if (isTv) Alignment.BottomCenter else Alignment.TopCenter)
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Surface(
                     color = Color.Black.copy(alpha = if (isTv) 0.78f else 0.82f),
@@ -542,6 +667,12 @@ fun PlayerScreen(
                                     applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
                                     controlsVisible = true
                                 })
+                                if (audioTrackCount > 1) {
+                                    TvPlayerControl("Áudio: $audioLabelState", {
+                                        cycleAudio()
+                                        controlsVisible = true
+                                    })
+                                }
                                 if (currentItem.type == ContentType.LIVE) {
                                     TvPlayerControl(
                                         if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState",
@@ -551,14 +682,43 @@ fun PlayerScreen(
                                     TvPlayerControl("Próximo canal", { changeLive(true); controlsVisible = true })
                                 }
                             } else {
+                                if (currentItem.type != ContentType.LIVE) {
+                                    AssistChip(
+                                        onClick = { player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L)) },
+                                        label = { Text("-10 s", fontSize = 11.sp) }
+                                    )
+                                }
+                                AssistChip(
+                                    onClick = {
+                                        if (player.isPlaying) player.pause() else player.play()
+                                        controlsVisible = true
+                                    },
+                                    label = { Text(if (isPlaying) "Pausar" else "Reproduzir", fontSize = 11.sp) }
+                                )
+                                if (currentItem.type != ContentType.LIVE) {
+                                    AssistChip(
+                                        onClick = {
+                                            val d = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                            player.seekTo((player.currentPosition + 10_000L).coerceAtMost(d))
+                                        },
+                                        label = { Text("+10 s", fontSize = 11.sp) }
+                                    )
+                                }
                                 AssistChip(onClick = ::rotate, label = { Text("Girar", fontSize = 11.sp) })
                                 AssistChip(
                                     onClick = {
                                         screenModeIndex = (screenModeIndex + 1) % screenModes.size
                                         applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
+                                        controlsVisible = true
                                     },
                                     label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
                                 )
+                                if (audioTrackCount > 1) {
+                                    AssistChip(
+                                        onClick = { cycleAudio(); controlsVisible = true },
+                                        label = { Text("Áudio: $audioLabelState", fontSize = 11.sp) }
+                                    )
+                                }
                                 if (currentItem.type == ContentType.LIVE) {
                                     AssistChip(
                                         onClick = ::cycleQuality,
@@ -578,19 +738,16 @@ fun PlayerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Text(formatPlayerTime(currentPositionMs), color = Color.White, fontSize = 11.sp)
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(if (isTv) 5.dp else 7.dp)
-                                        .background(VpSoft, RoundedCornerShape(50))
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(fraction)
-                                            .background(VpCyan, RoundedCornerShape(50))
-                                    )
-                                }
+                                Slider(
+                                    value = fraction,
+                                    onValueChange = { newValue ->
+                                        if (durationMs > 0L) {
+                                            player.seekTo((durationMs * newValue).toLong())
+                                            controlsVisible = true
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
                                 Text(formatPlayerTime(durationMs), color = VpMuted, fontSize = 11.sp)
                             }
                         }

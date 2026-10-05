@@ -132,6 +132,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     var selectedClient by remember { mutableStateOf<AdminDevice?>(null) }
     var newPartnerDialog by remember { mutableStateOf(false) }
     var grantPartner by remember { mutableStateOf<PartnerInfo?>(null) }
+    var partnerBackendReady by remember { mutableStateOf(true) }
 
     var updateInfo by remember { mutableStateOf<AdminUpdateInfo?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
@@ -147,8 +148,18 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
             }
             profile = p
             devices = ds
-            partners = if (p.isMaster) withContext(Dispatchers.IO) { repo.partners(token) } else emptyList()
-            credits = if (!p.isMaster) withContext(Dispatchers.IO) { repo.creditHistory(token) } else emptyList()
+
+            if (p.isMaster) {
+                credits = emptyList()
+                val partnerResult = withContext(Dispatchers.IO) { runCatching { repo.partners(token) } }
+                partners = partnerResult.getOrDefault(emptyList())
+                partnerBackendReady = partnerResult.isSuccess
+            } else {
+                partners = emptyList()
+                partnerBackendReady = true
+                credits = withContext(Dispatchers.IO) { repo.creditHistory(token) }
+            }
+
             status = "${ds.size} cliente(s)"
         } catch (e: Throwable) {
             status = "Falha: ${(e.message ?: "sem conexão").take(70)}"
@@ -225,6 +236,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                 Tab.CLIENTS -> ClientsTab(devices) { selectedClient = it }
                 Tab.PARTNERS -> PartnersTab(
                     partners = partners,
+                    backendReady = partnerBackendReady,
                     onNew = { newPartnerDialog = true },
                     onGrant = { grantPartner = it }
                 )
@@ -304,7 +316,16 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
     val blocked = clients.size - active
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text(if (profile?.isMaster == true) "Painel MASTER" else "Painel do parceiro", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+            Text(
+                when {
+                    profile == null -> "Carregando painel..."
+                    profile.isMaster -> "Painel MASTER"
+                    else -> "Painel do parceiro"
+                },
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp
+            )
             Text("VPlayo Android + Android TV", color = Muted, fontSize = 12.sp)
         }
         item {
@@ -468,12 +489,39 @@ private fun StatusPill(enabled: Boolean) {
 }
 
 @Composable
-private fun PartnersTab(partners: List<PartnerInfo>, onNew: () -> Unit, onGrant: (PartnerInfo) -> Unit) {
+private fun PartnersTab(
+    partners: List<PartnerInfo>,
+    backendReady: Boolean,
+    onNew: () -> Unit,
+    onGrant: (PartnerInfo) -> Unit
+) {
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text("Parceiros", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("Cada parceiro usa este mesmo app ADM, mas só enxerga os próprios clientes.", color = Muted, fontSize = 12.sp)
-            Button(onClick = onNew, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("Cadastrar parceiro") }
+            Text("Área exclusiva do MASTER. Cada parceiro enxerga somente os próprios clientes.", color = Muted, fontSize = 12.sp)
+
+            if (!backendReady) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = .10f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("Backend de parceiros ainda não ativado", color = Danger, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Seu acesso já está identificado como MASTER, mas é preciso publicar o novo Worker e executar o SQL do Supabase para cadastrar parceiros.",
+                            color = Muted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Button(
+                onClick = onNew,
+                enabled = backendReady,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            ) { Text("Cadastrar parceiro") }
         }
         if (partners.isEmpty()) item { EmptyCard("Nenhum parceiro cadastrado.") }
         items(partners, key = { it.id }) { p ->

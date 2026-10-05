@@ -10,9 +10,9 @@
 
     <style name="AppTheme.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#000000</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/viraplay_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/vplayo_splash_icon</item>
         <item name="windowSplashScreenIconBackgroundColor">#000000</item>
-        <item name="windowSplashScreenAnimationDuration">220</item>
+        <item name="windowSplashScreenAnimationDuration">180</item>
         <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>

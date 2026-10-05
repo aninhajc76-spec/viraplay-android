@@ -1,4 +1,4 @@
--- VPlayo 3.3.6 - base MASTER + PARCEIROS + CREDITOS
+-- VPlayo 3.3.8 - base MASTER + PARCEIROS + CREDITOS
 -- Script aditivo: preserva os clientes atuais. Execute no SQL Editor do Supabase.
 
 create extension if not exists pgcrypto;

@@ -16,13 +16,30 @@ class AdminRepository {
     private fun auth(token: String) = mapOf("Authorization" to "Bearer $token")
 
     fun profile(token: String): AdminProfile {
-        val o = JSONObject(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/profile", auth(token)))
-        return AdminProfile(
-            role = o.optString("role", "PARTNER"),
-            name = o.optString("name", "Parceiro"),
-            credits = o.optInt("credits", 0),
-            annualLicenseCredits = o.optInt("annual_license_credits", 15)
-        )
+        return try {
+            val o = JSONObject(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/profile", auth(token)))
+            AdminProfile(
+                role = o.optString("role", "PARTNER"),
+                name = o.optString("name", "Parceiro"),
+                credits = o.optInt("credits", 0),
+                annualLicenseCredits = o.optInt("annual_license_credits", 15)
+            )
+        } catch (e: Throwable) {
+            val message = e.message.orEmpty()
+            if (!message.contains("HTTP 404")) throw e
+
+            Http.getText(
+                "${AppConfig.SERVER_BASE_URL}/api/admin/devices",
+                auth(token),
+                maxChars = 8_000
+            )
+            AdminProfile(
+                role = "MASTER",
+                name = "VPlayo MASTER",
+                credits = 0,
+                annualLicenseCredits = 0
+            )
+        }
     }
 
     fun list(token: String): List<AdminDevice> =

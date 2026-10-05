@@ -1,0 +1,25 @@
+VPLAYO 3.3.8 — ATIVAR MASTER/PARCEIROS
+
+1. SUPABASE
+Abra o SQL Editor do projeto do VPlayo.
+Execute TODO o conteúdo de server/supabase_schema.sql.
+O script é aditivo e preserva os clientes existentes.
+
+2. CLOUDFLARE WORKER
+Abra o Worker viraplay-api.jcrstudio.workers.dev.
+Substitua o código pelo conteúdo de server/worker.js.
+Mantenha configurados:
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE
+ADMIN_TOKEN
+Opcional: ANNUAL_LICENSE_CREDITS=15
+Faça Deploy.
+
+3. TESTE
+Abra VPlayo ADM com sua chave MASTER atual.
+Deve aparecer:
+Painel MASTER
+Painel | Ativar | Clientes | Parceiros | Atualizações
+Não deve existir aba Créditos no MASTER.
+
+Depois, em Parceiros, cadastre o primeiro parceiro.
