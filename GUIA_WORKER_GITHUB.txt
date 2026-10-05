@@ -1,0 +1,26 @@
+VPLAYO - WORKER LIGADO AO GITHUB
+
+Objetivo:
+Depois desta configuração, você não precisa mais apagar e colar o Worker manualmente no Cloudflare.
+O Worker viraplay-api fica ligado ao GitHub e pode ser atualizado pelo repositório.
+
+Arquivos desta correção:
+- server/wrangler.jsonc
+- server/package.json
+
+Depois de importar este patch no GitHub:
+1. Cloudflare > Workers & Pages
+2. Abra o Worker: viraplay-api
+3. Settings > Builds
+4. Connect
+5. Conecte o GitHub
+6. Escolha o repositório: aninhajc76-spec/viraplay-android
+7. Root directory: server
+8. Deploy command: npm run deploy
+9. Production branch: main
+10. Salve/conecte
+
+IMPORTANTE:
+- O nome do Worker no Cloudflare deve continuar viraplay-api.
+- Não apague SUPABASE_URL, SUPABASE_SERVICE_ROLE ou ADMIN_TOKEN.
+- O arquivo worker.js já está dentro da pasta server no projeto.
