@@ -1,4 +1,4 @@
-# ViraPlay 3.0 - versão de teste consolidada
+# VPlayo 3.0 - versão de teste consolidada
 
 Esta versão foi preparada para uso real com os primeiros clientes, priorizando estabilidade, navegação simples e baixo custo de infraestrutura.
 
@@ -16,7 +16,7 @@ Esta versão foi preparada para uso real com os primeiros clientes, priorizando 
 - Pergunta para continuar de onde parou ou reiniciar.
 - Player em tela cheia e rotação no celular.
 - Retorno à tela anterior sem recriar o catálogo.
-- Suporte ViraPlay pelo WhatsApp: +55 84 9927-6322.
+- Suporte VPlayo pelo WhatsApp: +55 84 9927-6322.
 
 ## Catálogo e desempenho
 - Detecta URL no padrão Xtream `get.php` e usa `player_api.php` quando disponível.
@@ -26,7 +26,7 @@ Esta versão foi preparada para uso real com os primeiros clientes, priorizando 
 - Cache local em SQLite.
 - Abre usando o catálogo salvo e atualiza em segundo plano.
 - Atualização automática a cada 6 horas ou manual.
-- Se o backend ViraPlay ficar temporariamente fora do ar, o catálogo já salvo continua disponível.
+- Se o backend VPlayo ficar temporariamente fora do ar, o catálogo já salvo continua disponível.
 - Fallback para M3U quando a API estruturada não estiver disponível.
 
 ## ADM
@@ -41,10 +41,10 @@ Esta versão foi preparada para uso real com os primeiros clientes, priorizando 
 - Atualização automática do painel enquanto aberto.
 
 ## Arquitetura
-O vídeo não passa pelo Worker/Supabase da ViraPlay. O backend é usado apenas para cadastro/configuração do aparelho. O streaming vai da fonte configurada diretamente ao aparelho.
+O vídeo não passa pelo Worker/Supabase da VPlayo. O backend é usado apenas para cadastro/configuração do aparelho. O streaming vai da fonte configurada diretamente ao aparelho.
 
 ## Roku
 A API e o fluxo de ativação foram mantidos independentes da interface Android para permitir um cliente Roku futuro sem refazer o painel e o cadastro.
 
 
-> Substituída pela ViraPlay 3.1 Beta. Consulte docs/VIRAPLAY_3_1_BETA.md.
+> Substituída pela VPlayo 3.1 Beta. Consulte docs/VIRAPLAY_3_1_BETA.md.

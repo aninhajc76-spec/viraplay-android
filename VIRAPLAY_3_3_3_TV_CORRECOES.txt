@@ -1,4 +1,4 @@
-ViraPlay 3.3.3 - Correções completas para Android TV
+VPlayo 3.3.3 - Correções completas para Android TV
 
 Foco desta atualização: TV. O comportamento do celular foi preservado.
 
@@ -28,6 +28,6 @@ Versão preparada:
 
 Fluxo:
 1. Suba este ZIP no repositório.
-2. Rode "Importar projeto ViraPlay".
-3. Depois rode "Publicar atualização ViraPlay" com versionCode 36 / versionName 3.3.3.
+2. Rode "Importar projeto VPlayo".
+3. Depois rode "Publicar atualização VPlayo" com versionCode 36 / versionName 3.3.3.
 4. Teste primeiro na sua TV.

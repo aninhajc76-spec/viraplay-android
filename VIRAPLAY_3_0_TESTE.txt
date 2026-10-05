@@ -14,10 +14,10 @@ PRINCIPAIS MUDANÇAS
 - Pergunta para continuar de onde parou ou reiniciar.
 - Cache local: depois da primeira sincronização o app abre com o catálogo salvo.
 - Atualização automática do catálogo a cada 6 horas e manual pelo botão Atualizar.
-- Se o backend ViraPlay ficar temporariamente indisponível, o catálogo já salvo continua utilizável.
+- Se o backend VPlayo ficar temporariamente indisponível, o catálogo já salvo continua utilizável.
 - Player em tela cheia; no celular abre horizontal e permite girar.
 - Uma tentativa automática com extensão alternativa TS/M3U8 para canal ao vivo quando aplicável.
-- Suporte ViraPlay no WhatsApp +55 84 9927-6322.
+- Suporte VPlayo no WhatsApp +55 84 9927-6322.
 - ADM com Painel, Pendentes e Clientes.
 - Aparelho novo aparece automaticamente em Pendentes.
 - Ativação sem redigitar código: nome + URL M3U.
@@ -36,10 +36,10 @@ TESTE RECOMENDADO ANTES DE PASSAR AOS 4 CLIENTES
 9. Fechar completamente o app e abrir; o catálogo deve aparecer usando cache sem refazer a lista inteira.
 10. Testar Favoritos.
 11. Testar Bloquear/Liberar no ADM.
-12. Testar Suporte ViraPlay.
+12. Testar Suporte VPlayo.
 13. Testar em Android TV/TV Box com controle remoto.
 
 A Roku será uma segunda interface no futuro, usando a mesma API e o mesmo fluxo de ativação.
 
 
-ATUALIZAÇÃO: substituída pela ViraPlay 3.1 Beta.
+ATUALIZAÇÃO: substituída pela VPlayo 3.1 Beta.

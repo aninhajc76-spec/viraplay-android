@@ -2,10 +2,10 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="oval">
-            <solid android:color="#07172F"/>
+            <solid android:color="#050B18"/>
         </shape>
     </item>
-    <item android:left="16dp" android:top="16dp" android:right="16dp" android:bottom="16dp">
-        <bitmap android:src="@drawable/viraplay_app_icon" android:gravity="center"/>
+    <item android:left="24dp" android:top="24dp" android:right="24dp" android:bottom="24dp">
+        <bitmap android:src="@drawable/viraplay_logo" android:gravity="center"/>
     </item>
 </layer-list>

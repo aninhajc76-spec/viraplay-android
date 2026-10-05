@@ -186,7 +186,7 @@ private fun MobileHome(
         if (series.isNotEmpty()) item {
             ContentStrip("Séries", series, onOpen) { db.toggleFavorite(it.itemKey); onChanged() }
         }
-        item { OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte ViraPlay") } }
+        item { OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte VPlayo") } }
     }
 }
 

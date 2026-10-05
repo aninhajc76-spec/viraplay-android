@@ -1,0 +1,12 @@
+VPLAYO_3_3_7_REBRAND_ANIMACAO.txt
+
+Esta versão troca a identidade visual para VPlayo, atualiza a splash de inicialização com pequena animação e mantém a base técnica da 3.3.6.
+
+Principais ajustes incluídos:
+- nova logomarca VPlayo no player e no ADM
+- nome do app alterado para VPlayo
+- splash com animação curta (fade + scale) para celular e Android TV
+- banner e ícones atualizados
+- versão padrão: 3.3.7 / versionCode 40
+
+Observação: o package/applicationId ainda permanece com.viraplay.* para não quebrar a estrutura atual do projeto.

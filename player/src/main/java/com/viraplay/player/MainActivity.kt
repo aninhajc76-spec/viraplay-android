@@ -27,6 +27,6 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 3102)
         }
 
-        setContent { ViraPlayApp() }
+        setContent { StartupGate { VPlayoApp() } }
     }
 }

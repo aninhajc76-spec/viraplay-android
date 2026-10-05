@@ -4,7 +4,9 @@ import com.viraplay.shared.AdminDevice
 import com.viraplay.shared.AppConfig
 import com.viraplay.shared.Http
 import com.viraplay.shared.XtreamAccountClient
+import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
 
 class AdminRepository {
     companion object {
@@ -12,6 +14,16 @@ class AdminRepository {
     }
 
     private fun auth(token: String) = mapOf("Authorization" to "Bearer $token")
+
+    fun profile(token: String): AdminProfile {
+        val o = JSONObject(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/profile", auth(token)))
+        return AdminProfile(
+            role = o.optString("role", "PARTNER"),
+            name = o.optString("name", "Parceiro"),
+            credits = o.optInt("credits", 0),
+            annualLicenseCredits = o.optInt("annual_license_credits", 15)
+        )
+    }
 
     fun list(token: String): List<AdminDevice> =
         Http.parseDevices(
@@ -21,6 +33,24 @@ class AdminRepository {
                 maxChars = 2_000_000
             )
         ).filter { it.label != DELETED_MARKER }
+
+    fun lookup(token: String, code: String): AdminDevice {
+        val encoded = URLEncoder.encode(code.trim().uppercase(), "UTF-8")
+        val o = JSONObject(
+            Http.getText(
+                "${AppConfig.SERVER_BASE_URL}/api/admin/lookup?pairing_code=$encoded",
+                auth(token)
+            )
+        )
+        return AdminDevice(
+            deviceId = o.optString("device_id"),
+            pairingCode = o.optString("pairing_code"),
+            label = o.optString("label").takeIf { it.isNotBlank() && it != "null" },
+            platform = o.optString("platform").takeIf { it.isNotBlank() && it != "null" },
+            enabled = o.optBoolean("enabled", true),
+            playlistUrl = o.optString("playlist_url").takeIf { it.isNotBlank() && it != "null" }
+        )
+    }
 
     fun detectExpiryIso(playlist: String): String? =
         runCatching {
@@ -37,9 +67,7 @@ class AdminRepository {
                 device
             } else {
                 val expiry = detectExpiryIso(playlist)
-                if (expiry == null) {
-                    device
-                } else {
+                if (expiry == null) device else {
                     runCatching {
                         update(
                             token = token,
@@ -62,13 +90,15 @@ class AdminRepository {
         name: String,
         identifier: String?,
         expiresIso: String?,
-        playlist: String
+        playlist: String,
+        licenseMonths: Int = 12
     ) {
         val expiry = expiresIso ?: detectExpiryIso(playlist)
         val body = JSONObject()
-            .put("pairing_code", code)
+            .put("pairing_code", code.trim().uppercase())
             .put("label", ClientMetaCodec.encode(name, identifier, expiry))
             .put("playlist_url", playlist)
+            .put("license_months", licenseMonths)
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/claim", body, auth(token))
     }
 
@@ -97,5 +127,64 @@ class AdminRepository {
             .put("playlist_url", JSONObject.NULL)
             .put("label", DELETED_MARKER)
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/update", body, auth(token))
+    }
+
+    fun partners(token: String): List<PartnerInfo> {
+        val arr = JSONArray(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/partners", auth(token), maxChars = 1_000_000))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            PartnerInfo(
+                id = o.optString("id"),
+                name = o.optString("name"),
+                loginCode = o.optString("login_code"),
+                accessToken = o.optString("access_token"),
+                status = o.optString("status", "ACTIVE"),
+                credits = o.optInt("credits", 0),
+                clients = o.optInt("clients", 0)
+            )
+        }
+    }
+
+    fun createPartner(token: String, name: String): PartnerInfo {
+        val o = JSONObject(
+            Http.postJson(
+                "${AppConfig.SERVER_BASE_URL}/api/admin/partners/create",
+                JSONObject().put("name", name.trim()),
+                auth(token)
+            )
+        ).getJSONObject("partner")
+        return PartnerInfo(
+            id = o.optString("id"),
+            name = o.optString("name"),
+            loginCode = o.optString("login_code"),
+            accessToken = o.optString("access_token"),
+            status = o.optString("status", "ACTIVE"),
+            credits = o.optInt("credits", 0),
+            clients = o.optInt("clients", 0)
+        )
+    }
+
+    fun grantCredits(token: String, partnerId: String, amount: Int, note: String? = null) {
+        Http.postJson(
+            "${AppConfig.SERVER_BASE_URL}/api/admin/partners/credits",
+            JSONObject()
+                .put("partner_id", partnerId)
+                .put("amount", amount)
+                .put("note", note ?: "Crédito manual MASTER"),
+            auth(token)
+        )
+    }
+
+    fun creditHistory(token: String): List<CreditEntry> {
+        val arr = JSONArray(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/credits/history", auth(token), maxChars = 600_000))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            CreditEntry(
+                amount = o.optInt("amount", 0),
+                kind = o.optString("kind"),
+                note = o.optString("note").takeIf { it.isNotBlank() && it != "null" },
+                createdAt = o.optString("created_at").takeIf { it.isNotBlank() && it != "null" }
+            )
+        }
     }
 }

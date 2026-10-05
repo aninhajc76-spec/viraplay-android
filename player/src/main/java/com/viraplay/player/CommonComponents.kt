@@ -32,24 +32,24 @@ import coil.compose.AsyncImage
 fun BrandWordmark(
     modifier: Modifier = Modifier,
     large: Boolean = false,
-    showBeta: Boolean = true
+    showBeta: Boolean = false
 ) {
     val wide = LocalConfiguration.current.screenWidthDp >= 700
     val logoWidth = when {
-        large && wide -> 300.dp
-        large -> 220.dp
-        else -> 165.dp
+        large && wide -> 248.dp
+        large -> 198.dp
+        else -> 150.dp
     }
     val logoHeight = when {
-        large && wide -> 92.dp
-        large -> 72.dp
-        else -> 50.dp
+        large && wide -> 72.dp
+        large -> 62.dp
+        else -> 44.dp
     }
 
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.foundation.Image(
             painter = painterResource(R.drawable.viraplay_wordmark),
-            contentDescription = "ViraPlay",
+            contentDescription = "VPlayo",
             contentScale = ContentScale.Fit,
             modifier = Modifier.width(logoWidth).height(logoHeight)
         )

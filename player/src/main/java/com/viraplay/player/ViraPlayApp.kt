@@ -34,7 +34,7 @@ private sealed interface Overlay {
 }
 
 @Composable
-fun ViraPlayApp() {
+fun VPlayoApp() {
     val context = LocalContext.current
     val uiMode = context.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
     val isTv =
@@ -87,7 +87,7 @@ fun ViraPlayApp() {
                     identity,
                     if (isTv) "ANDROID_TV" else "ANDROID_MOBILE"
                 )
-                repository.config(identity)
+                repository.config(identity, forceCatalog)
             }
 
             enabled = cfg.enabled
@@ -192,7 +192,7 @@ fun ViraPlayApp() {
     val accessNotice = ExpiryNotifier.notice(accountInfo)
     val adultAccess = adultUnlocked || !preferences.parentalEnabled
 
-    MaterialTheme(colorScheme = ViraPlayColors) {
+    MaterialTheme(colorScheme = VPlayoColors) {
         Box(Modifier.fillMaxSize().background(VpBg)) {
             // Não mantém a tela anterior viva por trás do player/configurações.
             // Em TV isso evita disputa de foco e evita o SurfaceView da prévia aparecer
@@ -364,7 +364,7 @@ fun ViraPlayApp() {
                     onDismissRequest = {
                         if (!info.mandatory && !updateBusy) updateInfo = null
                     },
-                    title = { Text("Atualização ViraPlay ${info.versionName}") },
+                    title = { Text("Atualização VPlayo ${info.versionName}") },
                     text = {
                         Column {
                             Text(info.message)

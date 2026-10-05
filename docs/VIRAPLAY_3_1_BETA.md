@@ -1,10 +1,10 @@
-# ViraPlay 3.1 Beta
+# VPlayo 3.1 Beta
 
 Versão consolidada para teste real com clientes.
 
 ## Cliente
 - Interface mobile refinada e navegação com ícones.
-- Identidade ViraPlay Beta discreta.
+- Identidade VPlayo Beta discreta.
 - Novo ícone de launcher com fundo premium.
 - Nenhuma informação de host, domínio ou fonte exibida ao cliente.
 - Vencimento consultado pela conta Xtream quando disponível.

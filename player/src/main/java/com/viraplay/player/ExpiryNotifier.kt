@@ -23,7 +23,7 @@ object ExpiryNotifier {
         val epoch = info?.expiresAtEpochSeconds ?: return null
         val remaining = epoch * 1000L - System.currentTimeMillis()
         return when {
-            remaining <= 0L -> "Seu acesso venceu. Renove pelo Suporte ViraPlay."
+            remaining <= 0L -> "Seu acesso venceu. Renove pelo Suporte VPlayo."
             remaining <= 6L * 60L * 60L * 1000L -> {
                 val mins = ceil(remaining / 60_000.0).toLong().coerceAtLeast(1)
                 val h = mins / 60
@@ -55,13 +55,13 @@ object ExpiryNotifier {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Avisos ViraPlay", NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(CHANNEL_ID, "Avisos VPlayo", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("ViraPlay")
+            .setContentTitle("VPlayo")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setAutoCancel(true)

@@ -183,7 +183,7 @@ private fun TvHome(
         )
     ) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 44.dp, vertical = 26.dp)
+            Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 18.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BrandWordmark(large = true)
@@ -203,7 +203,7 @@ private fun TvHome(
                 }
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("ViraPlay ${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("VPlayo ${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text(status, color = VpMuted, fontSize = 10.sp, maxLines = 1)
                 }
             }
@@ -219,7 +219,7 @@ private fun TvHome(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
 
             Row(
                 Modifier.fillMaxWidth().weight(1f),
@@ -284,9 +284,9 @@ private fun TvHome(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("ViraPlay", color = VpCyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text("VPlayo", color = VpCyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.width(4.dp).height(4.dp).background(VpMuted, RoundedCornerShape(50)))
                 Spacer(Modifier.width(10.dp))

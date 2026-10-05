@@ -1,6 +1,6 @@
 package com.viraplay.shared
 
-/** Parser legado mantido para compatibilidade. A ViraPlay 3.0 usa M3uSync em streaming. */
+/** Parser legado mantido para compatibilidade. A VPlayo 3.0 usa M3uSync em streaming. */
 object M3uParser {
     private val attrRegex = Regex("""([\w-]+)="([^"]*)"""", RegexOption.IGNORE_CASE)
 

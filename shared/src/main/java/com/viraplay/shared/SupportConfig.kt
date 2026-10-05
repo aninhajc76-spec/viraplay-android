@@ -8,7 +8,7 @@ object SupportConfig {
 
     fun whatsappUrl(deviceCode: String? = null): String {
         val message = buildString {
-            append("Olá! Preciso de suporte com meu ViraPlay.")
+            append("Olá! Preciso de suporte com meu VPlayo.")
             if (!deviceCode.isNullOrBlank()) {
                 append(" Código do aparelho: ")
                 append(deviceCode)

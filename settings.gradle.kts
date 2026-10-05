@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ViraPlay"
+rootProject.name = "VPlayo"
 include(":shared")
 include(":player")
 include(":admin")

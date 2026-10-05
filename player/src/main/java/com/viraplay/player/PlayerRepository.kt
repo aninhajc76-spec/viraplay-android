@@ -6,7 +6,7 @@ import com.viraplay.shared.Http
 import java.net.URLEncoder
 import org.json.JSONObject
 
-/** Compatibilidade com a base anterior. A ViraPlay 3.0 usa ContentRepository. */
+/** Compatibilidade com a base anterior. A VPlayo 3.0 usa ContentRepository. */
 class PlayerRepository {
     fun register(deviceId: String, secret: String, code: String, platform: String) {
         val body = JSONObject()

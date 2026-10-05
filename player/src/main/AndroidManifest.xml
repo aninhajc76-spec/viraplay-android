@@ -11,7 +11,7 @@
         android:banner="@drawable/viraplay_banner"
         android:icon="@drawable/viraplay_launcher_icon"
         android:roundIcon="@drawable/viraplay_launcher_icon"
-        android:label="ViraPlay"
+        android:label="VPlayo"
         android:theme="@style/AppTheme.Starting"
         android:usesCleartextTraffic="true">
 

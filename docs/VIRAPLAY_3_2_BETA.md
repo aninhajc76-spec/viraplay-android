@@ -1,4 +1,4 @@
-# ViraPlay 3.2 Beta
+# VPlayo 3.2 Beta
 
 Rodada consolidada de polimento para teste real em celular e Android TV.
 

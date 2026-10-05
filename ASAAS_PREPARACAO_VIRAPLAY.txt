@@ -1,0 +1,18 @@
+VIRAPLAY 3.3.6 - PREPARACAO ASAAS
+
+A base de parceiros/creditos ja possui tabela de pagamentos e endpoint reservado para webhook.
+NAO coloque nenhuma chave Asaas dentro do APK.
+
+Quando a conta Asaas estiver pronta, configurar apenas no Cloudflare Worker:
+- ASAAS_API_KEY
+- ASAAS_WEBHOOK_TOKEN
+- opcional: ASAAS_ENV = sandbox / production
+
+O fluxo previsto sera:
+1. Parceiro escolhe pacote de creditos no ADM.
+2. Worker cria cobranca Pix dinamica no Asaas.
+3. Asaas confirma via webhook.
+4. Worker credita a conta do parceiro uma unica vez.
+5. Historico fica registrado no viraplay_credit_ledger.
+
+Nesta versao a compra automatica fica VISIVEL COMO EM PREPARACAO para nao movimentar dinheiro antes dos testes.

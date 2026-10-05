@@ -37,11 +37,7 @@ private val Danger = Color(0xFFFF5E78)
 private val Muted = Color(0xFF98A3B8)
 
 private enum class Tab(val label: String) {
-    DASHBOARD("Painel"), PENDING("Pendentes"), CLIENTS("Clientes"), UPDATES("Atualizações")
-}
-
-private enum class ClientFilter(val label: String) {
-    ALL("Todos"), EXPIRING("Vencendo"), EXPIRED("Vencidos")
+    DASHBOARD("Painel"), ACTIVATE("Ativar"), CLIENTS("Clientes"), PARTNERS("Parceiros"), CREDITS("Créditos"), UPDATES("Atualizações")
 }
 
 @Composable
@@ -52,13 +48,7 @@ fun AdminApp() {
     var logged by remember { mutableStateOf(token.isNotBlank()) }
 
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Cyan,
-            secondary = Purple,
-            background = Bg,
-            surface = Panel,
-            error = Danger
-        )
+        colorScheme = darkColorScheme(primary = Cyan, secondary = Purple, background = Bg, surface = Panel, error = Danger)
     ) {
         Surface(color = Bg, modifier = Modifier.fillMaxSize()) {
             if (logged) {
@@ -76,8 +66,9 @@ fun AdminApp() {
                     onToken = { token = it },
                     onLogin = {
                         if (token.isNotBlank()) {
-                            prefs.edit().putString("admin_token", token.trim()).apply()
-                            token = token.trim()
+                            val clean = token.trim()
+                            prefs.edit().putString("admin_token", clean).apply()
+                            token = clean
                             logged = true
                         }
                     }
@@ -91,9 +82,9 @@ fun AdminApp() {
 private fun Brand(modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(R.drawable.viraplay_wordmark),
-        contentDescription = "ViraPlay ADM",
+        contentDescription = "VPlayo ADM",
         contentScale = ContentScale.Fit,
-        modifier = modifier.width(190.dp).height(60.dp)
+        modifier = modifier.width(170.dp).height(52.dp)
     )
 }
 
@@ -104,29 +95,21 @@ private fun Login(token: String, onToken: (String) -> Unit, onLogin: () -> Unit)
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Brand(Modifier.width(280.dp).height(100.dp))
+        Brand(Modifier.width(270.dp).height(90.dp))
         Spacer(Modifier.height(18.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Panel),
-            shape = RoundedCornerShape(22.dp),
-            modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth()
-        ) {
+        Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(22.dp), modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
             Column(Modifier.padding(22.dp)) {
-                Text("ViraPlay ADM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                Text("Gerencie seus clientes e aparelhos.", color = Muted, fontSize = 13.sp)
+                Text("VPlayo ADM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+                Text("MASTER e parceiros usam o mesmo aplicativo.", color = Muted, fontSize = 13.sp)
                 OutlinedTextField(
                     value = token,
                     onValueChange = onToken,
-                    label = { Text("Chave do administrador") },
+                    label = { Text("Chave de acesso") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
                 )
-                Button(
-                    onClick = onLogin,
-                    enabled = token.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                ) { Text("Entrar") }
+                Button(onClick = onLogin, enabled = token.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text("Entrar") }
             }
         }
     }
@@ -138,30 +121,37 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     val repo = remember { AdminRepository() }
     val updateManager = remember { AdminUpdateManager(context) }
     val scope = rememberCoroutineScope()
+
+    var profile by remember { mutableStateOf<AdminProfile?>(null) }
     var devices by remember { mutableStateOf<List<AdminDevice>>(emptyList()) }
+    var partners by remember { mutableStateOf<List<PartnerInfo>>(emptyList()) }
+    var credits by remember { mutableStateOf<List<CreditEntry>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
-    var search by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Conectando...") }
-    var activating by remember { mutableStateOf<AdminDevice?>(null) }
-    var editing by remember { mutableStateOf<AdminDevice?>(null) }
     var firstLoad by remember { mutableStateOf(true) }
+    var selectedClient by remember { mutableStateOf<AdminDevice?>(null) }
+    var newPartnerDialog by remember { mutableStateOf(false) }
+    var grantPartner by remember { mutableStateOf<PartnerInfo?>(null) }
+
     var updateInfo by remember { mutableStateOf<AdminUpdateInfo?>(null) }
-    var showUpdateDialog by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateBusy by remember { mutableStateOf(false) }
     var updateError by remember { mutableStateOf<String?>(null) }
-    var lastUpdateCheck by remember { mutableStateOf("Ainda não verificado") }
 
     suspend fun load() {
         try {
-            val loaded = withContext(Dispatchers.IO) {
+            val p = withContext(Dispatchers.IO) { repo.profile(token) }
+            val ds = withContext(Dispatchers.IO) {
                 val base = repo.list(token)
                 repo.enrichMissingExpiries(token, base)
             }
-            devices = loaded
-            status = "${loaded.size} aparelho(s)"
+            profile = p
+            devices = ds
+            partners = if (p.isMaster) withContext(Dispatchers.IO) { repo.partners(token) } else emptyList()
+            credits = if (!p.isMaster) withContext(Dispatchers.IO) { repo.creditHistory(token) } else emptyList()
+            status = "${ds.size} cliente(s)"
         } catch (e: Throwable) {
-            status = "Falha: ${(e.message ?: "sem conexão").take(80)}"
+            status = "Falha: ${(e.message ?: "sem conexão").take(70)}"
         } finally {
             firstLoad = false
         }
@@ -172,93 +162,52 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     LaunchedEffect(Unit) {
         load()
         while (true) {
-            delay(20_000)
+            delay(30_000)
             load()
         }
     }
 
-    suspend fun checkForUpdate(showNoUpdate: Boolean = false) {
-        checkingUpdate = true
-        updateError = null
-        try {
-            val found = withContext(Dispatchers.IO) { updateManager.check() }
-            updateInfo = found
-            if (found != null) showUpdateDialog = true
-            lastUpdateCheck = if (found != null) {
-                "Nova versão ${found.versionName} disponível"
-            } else {
-                "ViraPlay ADM ${BuildConfig.VERSION_NAME} está atualizado"
-            }
-            if (showNoUpdate && found == null) {
-                updateError = "Nenhuma atualização disponível no momento."
-            }
-        } catch (e: Throwable) {
-            updateError = (e.message ?: "Não foi possível verificar atualizações.").take(120)
-            lastUpdateCheck = "Falha ao verificar"
-        } finally {
-            checkingUpdate = false
+    val currentProfile = profile
+    val tabs = remember(currentProfile?.role) {
+        if (currentProfile?.isMaster == true) {
+            listOf(Tab.DASHBOARD, Tab.ACTIVATE, Tab.CLIENTS, Tab.PARTNERS, Tab.UPDATES)
+        } else {
+            listOf(Tab.DASHBOARD, Tab.ACTIVATE, Tab.CLIENTS, Tab.CREDITS, Tab.UPDATES)
         }
     }
-
-    LaunchedEffect(Unit) {
-        delay(2_000)
-        checkForUpdate(false)
-        while (true) {
-            delay(30L * 60L * 1000L)
-            checkForUpdate(false)
-        }
-    }
-
-    val pending = devices.filter { it.playlistUrl.isNullOrBlank() }
-    val clients = devices.filter { !it.playlistUrl.isNullOrBlank() }
-    val active = clients.count { it.enabled }
-    val blocked = clients.size - active
-    val visibleClients = clients.filter { device ->
-        val meta = ClientMetaCodec.decode(device.label)
-        search.isBlank() ||
-            meta.name.contains(search, true) ||
-            meta.identifier.orEmpty().contains(search, true) ||
-            device.pairingCode.contains(search, true) ||
-            playlistUsername(device.playlistUrl).orEmpty().contains(search, true)
-    }
+    if (tab !in tabs) tab = Tab.DASHBOARD
 
     Scaffold(
         containerColor = Bg,
         topBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Brand()
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(status, color = Muted, fontSize = 10.sp, maxLines = 1)
-                    Row {
-                        TextButton(onClick = { reload() }) { Text("Atualizar") }
-                        TextButton(onClick = onLogout) { Text("Sair") }
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Brand()
+                    Spacer(Modifier.weight(1f))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(currentProfile?.name ?: status, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (currentProfile?.isMaster == false) "${currentProfile.credits} créditos" else status,
+                            color = if (currentProfile?.isMaster == false) Cyan else Muted,
+                            fontSize = 10.sp
+                        )
                     }
+                    TextButton(onClick = { reload() }) { Text("↻") }
+                    TextButton(onClick = onLogout) { Text("Sair") }
                 }
             }
         },
         bottomBar = {
             NavigationBar(containerColor = Panel) {
-                Tab.entries.forEach { item ->
+                tabs.forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
                         onClick = { tab = item },
-                        icon = {
-                            Text(
-                                when (item) {
-                                    Tab.DASHBOARD -> "ADM"
-                                    Tab.PENDING -> pending.size.toString()
-                                    Tab.CLIENTS -> clients.size.toString()
-                                    Tab.UPDATES -> if (updateInfo != null) "NOVO" else "UPD"
-                                },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        label = { Text(item.label) }
+                        icon = { Text(navGlyph(item), fontSize = 10.sp, fontWeight = FontWeight.Black) },
+                        label = { Text(item.label, fontSize = 9.sp) }
                     )
                 }
             }
@@ -266,246 +215,122 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                Tab.DASHBOARD -> DashboardTab(
-                    clients = clients.size,
-                    active = active,
-                    blocked = blocked,
-                    pending = pending,
-                    onActivate = { activating = it },
-                    onPending = { tab = Tab.PENDING },
-                    onClients = { tab = Tab.CLIENTS }
+                Tab.DASHBOARD -> DashboardTab(currentProfile, devices, partners.size) { tab = it }
+                Tab.ACTIVATE -> ActivateByCodeTab(
+                    token = token,
+                    repo = repo,
+                    profile = currentProfile,
+                    onActivated = { reload(); tab = Tab.CLIENTS }
                 )
-                Tab.PENDING -> PendingTab(pending) { activating = it }
-                Tab.CLIENTS -> ClientsTab(
-                    items = visibleClients,
-                    search = search,
-                    onSearch = { search = it },
-                    onOpen = { editing = it }
+                Tab.CLIENTS -> ClientsTab(devices) { selectedClient = it }
+                Tab.PARTNERS -> PartnersTab(
+                    partners = partners,
+                    onNew = { newPartnerDialog = true },
+                    onGrant = { grantPartner = it }
                 )
+                Tab.CREDITS -> CreditsTab(currentProfile, credits)
                 Tab.UPDATES -> UpdatesTab(
                     info = updateInfo,
                     checking = checkingUpdate,
                     busy = updateBusy,
-                    lastCheck = lastUpdateCheck,
                     error = updateError,
-                    onCheck = { scope.launch { checkForUpdate(true) } },
+                    onCheck = {
+                        checkingUpdate = true
+                        updateError = null
+                        scope.launch {
+                            try { updateInfo = withContext(Dispatchers.IO) { updateManager.check() } }
+                            catch (e: Throwable) { updateError = e.message ?: "Falha ao verificar" }
+                            finally { checkingUpdate = false }
+                        }
+                    },
                     onInstall = { info ->
                         updateBusy = true
                         updateError = null
                         scope.launch {
-                            val file = withContext(Dispatchers.IO) {
-                                runCatching { updateManager.download(info) }
-                            }
-                            file.onSuccess { apk ->
+                            val result = withContext(Dispatchers.IO) { runCatching { updateManager.download(info) } }
+                            result.onSuccess { apk ->
                                 updateBusy = false
                                 when (updateManager.launchInstaller(apk)) {
                                     AdminInstallLaunchResult.STARTED -> Unit
-                                    AdminInstallLaunchResult.NEED_PERMISSION ->
-                                        updateError = "Autorize a instalação e toque em Instalar novamente."
+                                    AdminInstallLaunchResult.NEED_PERMISSION -> updateError = "Autorize a instalação e tente novamente."
                                 }
-                            }.onFailure { e ->
+                            }.onFailure {
                                 updateBusy = false
-                                updateError = e.message ?: "Não foi possível baixar a atualização."
+                                updateError = it.message ?: "Falha ao baixar atualização"
                             }
                         }
                     }
                 )
             }
-
-            if (firstLoad) {
-                CircularProgressIndicator(color = Cyan, modifier = Modifier.align(Alignment.Center))
-            }
+            if (firstLoad) CircularProgressIndicator(color = Cyan, modifier = Modifier.align(Alignment.Center))
         }
     }
 
-    if (showUpdateDialog) updateInfo?.let { info ->
-        AlertDialog(
-            onDismissRequest = { if (!info.mandatory && !updateBusy) showUpdateDialog = false },
-            title = { Text("Atualização do ViraPlay ADM") },
-            text = {
-                Column {
-                    Text("Versão ${info.versionName} disponível.", color = Color.White, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(info.message, color = Muted)
-                    if (info.mandatory) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("Atualização obrigatória.", color = Cyan, fontWeight = FontWeight.Bold)
-                    }
-                    if (updateBusy) {
-                        Spacer(Modifier.height(12.dp))
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Text("Baixando atualização...", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-                    }
-                    updateError?.let {
-                        Spacer(Modifier.height(8.dp))
-                        Text(it, color = Danger, fontSize = 11.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = !updateBusy,
-                    onClick = {
-                        updateBusy = true
-                        updateError = null
-                        scope.launch {
-                            val file = withContext(Dispatchers.IO) { runCatching { updateManager.download(info) } }
-                            file.onSuccess { apk ->
-                                updateBusy = false
-                                when (updateManager.launchInstaller(apk)) {
-                                    AdminInstallLaunchResult.STARTED -> Unit
-                                    AdminInstallLaunchResult.NEED_PERMISSION ->
-                                        updateError = "Autorize a instalação e toque em Atualizar novamente."
-                                }
-                            }.onFailure { e ->
-                                updateBusy = false
-                                updateError = e.message ?: "Não foi possível baixar a atualização."
-                            }
-                        }
-                    }
-                ) { Text("Atualizar agora") }
-            },
-            dismissButton = {
-                if (!info.mandatory) {
-                    TextButton(enabled = !updateBusy, onClick = { showUpdateDialog = false }) { Text("Depois") }
-                }
-            }
-        )
+    selectedClient?.let { device ->
+        EditClientDialog(device, token, repo, onDismiss = { selectedClient = null }, onChanged = {
+            selectedClient = null
+            reload()
+        })
     }
 
-    activating?.let { device ->
-        ActivateDialog(
-            device = device,
-            token = token,
-            repo = repo,
-            onDismiss = { activating = null },
-            onSaved = {
-                activating = null
-                tab = Tab.CLIENTS
-                reload()
-            }
-        )
+    if (newPartnerDialog) {
+        NewPartnerDialog(token, repo, onDismiss = { newPartnerDialog = false }, onCreated = {
+            newPartnerDialog = false
+            reload()
+        })
     }
 
-    editing?.let { device ->
-        EditDialog(
-            device = device,
-            token = token,
-            repo = repo,
-            onDismiss = { editing = null },
-            onChanged = {
-                editing = null
-                reload()
-            }
-        )
+    grantPartner?.let { partner ->
+        GrantCreditsDialog(partner, token, repo, onDismiss = { grantPartner = null }, onSaved = {
+            grantPartner = null
+            reload()
+        })
     }
 }
 
-@Composable
-private fun UpdatesTab(
-    info: AdminUpdateInfo?,
-    checking: Boolean,
-    busy: Boolean,
-    lastCheck: String,
-    error: String?,
-    onCheck: () -> Unit,
-    onInstall: (AdminUpdateInfo) -> Unit
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Text("Atualizações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-            Text("O ViraPlay ADM também recebe novas versões sem precisar procurar APK manualmente.", color = Muted, fontSize = 12.sp)
-        }
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Panel),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("Versão instalada", color = Muted, fontSize = 11.sp)
-                    Text("ViraPlay ADM ${BuildConfig.VERSION_NAME}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text(lastCheck, color = if (info != null) Cyan else Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-                    error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
-                    Button(
-                        onClick = onCheck,
-                        enabled = !checking && !busy,
-                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
-                    ) {
-                        Text(if (checking) "Verificando..." else "Verificar agora")
-                    }
-                }
-            }
-        }
-        info?.let { update ->
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = 0.10f)),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Nova versão ${update.versionName}", color = Cyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text(update.message, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-                        if (update.mandatory) {
-                            Text("Obrigatória", color = Danger, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-                        }
-                        Button(
-                            onClick = { onInstall(update) },
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
-                        ) {
-                            Text(if (busy) "Baixando..." else "Baixar e instalar")
-                        }
-                    }
-                }
-            }
-        }
-    }
+private fun navGlyph(tab: Tab): String = when (tab) {
+    Tab.DASHBOARD -> "ADM"
+    Tab.ACTIVATE -> "+"
+    Tab.CLIENTS -> "CL"
+    Tab.PARTNERS -> "P"
+    Tab.CREDITS -> "CR"
+    Tab.UPDATES -> "UPD"
 }
 
 @Composable
-private fun DashboardTab(
-    clients: Int,
-    active: Int,
-    blocked: Int,
-    pending: List<AdminDevice>,
-    onActivate: (AdminDevice) -> Unit,
-    onPending: () -> Unit,
-    onClients: () -> Unit
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
+private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, partnerCount: Int, go: (Tab) -> Unit) {
+    val clients = devices.filter { !it.playlistUrl.isNullOrBlank() }
+    val active = clients.count { it.enabled }
+    val blocked = clients.size - active
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Visão geral", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-            Text("Controle simples dos seus aparelhos ViraPlay.", color = Muted, fontSize = 12.sp)
+            Text(if (profile?.isMaster == true) "Painel MASTER" else "Painel do parceiro", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+            Text("VPlayo Android + Android TV", color = Muted, fontSize = 12.sp)
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("Clientes", clients, Cyan, Modifier.weight(1f))
+                Metric("Clientes", clients.size, Cyan, Modifier.weight(1f))
                 Metric("Ativos", active, Green, Modifier.weight(1f))
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("Pendentes", pending.size, Purple, Modifier.weight(1f))
                 Metric("Bloqueados", blocked, Danger, Modifier.weight(1f))
+                Metric(if (profile?.isMaster == true) "Parceiros" else "Créditos", if (profile?.isMaster == true) partnerCount else profile?.credits ?: 0, Purple, Modifier.weight(1f))
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onPending, modifier = Modifier.weight(1f)) { Text("Ver pendentes") }
-                OutlinedButton(onClick = onClients, modifier = Modifier.weight(1f)) { Text("Ver clientes") }
-            }
+            Button(onClick = { go(Tab.ACTIVATE) }, modifier = Modifier.fillMaxWidth()) { Text("Ativar aparelho por código") }
         }
-        if (pending.isNotEmpty()) {
-            item { Text("Aguardando ativação", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
-            items(pending.take(6), key = { it.deviceId }) { item -> PendingCard(item) { onActivate(item) } }
+        if (profile?.isMaster == false) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(15.dp)) {
+                        Text("Licença anual", color = Cyan, fontWeight = FontWeight.Bold)
+                        Text("Cada nova ativação consome ${profile.annualLicenseCredits} créditos. O aparelho fica vinculado ao seu painel.", color = Muted, fontSize = 11.sp)
+                    }
+                }
+            }
         }
     }
 }
@@ -514,101 +339,107 @@ private fun DashboardTab(
 private fun Metric(label: String, value: Int, color: Color, modifier: Modifier) {
     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = modifier) {
         Column(Modifier.padding(16.dp)) {
-            Text(value.toString(), color = color, fontSize = 31.sp, fontWeight = FontWeight.Bold)
-            Text(label, color = Muted, fontSize = 12.sp)
+            Text(value.toString(), color = color, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text(label, color = Muted, fontSize = 11.sp)
         }
     }
 }
 
 @Composable
-private fun PendingTab(items: List<AdminDevice>, onActivate: (AdminDevice) -> Unit) {
+private fun ActivateByCodeTab(token: String, repo: AdminRepository, profile: AdminProfile?, onActivated: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var code by remember { mutableStateOf("") }
+    var device by remember { mutableStateOf<AdminDevice?>(null) }
+    var name by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
+    var playlist by remember { mutableStateOf("") }
+    var expiry by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun lookup() {
+        if (code.isBlank()) return
+        busy = true; error = null
+        scope.launch {
+            try {
+                device = withContext(Dispatchers.IO) { repo.lookup(token, code) }
+            } catch (e: Throwable) {
+                error = when {
+                    (e.message ?: "").contains("409") -> "Este aparelho já pertence a outro parceiro."
+                    else -> "Código não encontrado ou indisponível."
+                }
+            } finally { busy = false }
+        }
+    }
+
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Text("Novos dispositivos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("O cliente instala o app e o código aparece aqui automaticamente.", color = Muted, fontSize = 12.sp)
+            Text("Ativar aparelho", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+            Text("O cliente instala o VPlayo e envia o código. Ele só aparece no seu painel depois que você ativar.", color = Muted, fontSize = 12.sp)
         }
-        if (items.isEmpty()) item { EmptyCard("Nenhum aparelho aguardando ativação.") }
-        items(items, key = { it.deviceId }) { device -> PendingCard(device) { onActivate(device) } }
+        item {
+            OutlinedTextField(value = code, onValueChange = { code = it.uppercase().take(8); device = null }, label = { Text("Código do aparelho") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Button(onClick = { lookup() }, enabled = code.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text(if (busy) "Buscando..." else "Buscar código") }
+        }
+        device?.let { found ->
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("${found.pairingCode} • ${found.platform ?: "Android"}", color = Cyan, fontWeight = FontWeight.Bold)
+                        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome do cliente") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        OutlinedTextField(value = identifier, onValueChange = { identifier = it }, label = { Text("Identificação (opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        OutlinedTextField(value = playlist, onValueChange = { playlist = it }, label = { Text("Lista M3U / URL") }, minLines = 3, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        OutlinedTextField(value = expiry, onValueChange = { expiry = it }, label = { Text("Vencimento da lista (DD/MM/AAAA, opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        if (profile?.isMaster == false) {
+                            Text("Custo: ${profile.annualLicenseCredits} créditos • licença VPlayo por 12 meses", color = Purple, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+                        } else {
+                            Text("Cliente MASTER • sem consumo de créditos", color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+                        }
+                        Button(
+                            onClick = {
+                                if (name.isBlank() || playlist.isBlank()) { error = "Preencha nome e lista."; return@Button }
+                                val expiryIso = ClientMetaCodec.inputToIso(expiry)
+                                if (expiry.isNotBlank() && expiryIso == null) { error = "Data inválida."; return@Button }
+                                busy = true; error = null
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            repo.claim(token, found.pairingCode, name.trim(), identifier.trim().takeIf { it.isNotBlank() }, expiryIso, playlist.trim(), 12)
+                                        }
+                                        onActivated()
+                                    } catch (e: Throwable) {
+                                        error = when {
+                                            (e.message ?: "").contains("insufficient_credits") -> "Créditos insuficientes para esta ativação."
+                                            (e.message ?: "").contains("409") -> "Este aparelho já foi vinculado a outro parceiro."
+                                            else -> "Não foi possível ativar: ${(e.message ?: "erro").take(80)}"
+                                        }
+                                    } finally { busy = false }
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                        ) { Text(if (busy) "Ativando..." else "Ativar por 12 meses") }
+                    }
+                }
+            }
+        }
+        error?.let { item { Text(it, color = Danger, fontSize = 12.sp) } }
     }
 }
 
 @Composable
-private fun PendingCard(device: AdminDevice, onActivate: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = Purple.copy(alpha = 0.18f), shape = RoundedCornerShape(12.dp)) {
-                Text(
-                    device.pairingCode,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-                )
-            }
-            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text("Novo aparelho", color = Color.White, fontWeight = FontWeight.Bold)
-                Text(device.platform ?: "Android", color = Muted, fontSize = 11.sp)
-            }
-            Button(onClick = onActivate) { Text("Ativar") }
-        }
+private fun ClientsTab(devices: List<AdminDevice>, onOpen: (AdminDevice) -> Unit) {
+    var search by remember { mutableStateOf("") }
+    val clients = devices.filter { !it.playlistUrl.isNullOrBlank() && it.label != AdminRepository.DELETED_MARKER }.filter { d ->
+        val m = ClientMetaCodec.decode(d.label)
+        search.isBlank() || m.name.contains(search, true) || d.pairingCode.contains(search, true) || m.identifier.orEmpty().contains(search, true)
     }
-}
-
-@Composable
-private fun ClientsTab(
-    items: List<AdminDevice>,
-    search: String,
-    onSearch: (String) -> Unit,
-    onOpen: (AdminDevice) -> Unit
-) {
-    var filter by remember { mutableStateOf(ClientFilter.ALL) }
-
-    val filtered = items.filter { device ->
-        val days = ClientMetaCodec.daysUntil(ClientMetaCodec.decode(device.label).expiresIso)
-        when (filter) {
-            ClientFilter.ALL -> true
-            ClientFilter.EXPIRING -> days != null && days in 0..7
-            ClientFilter.EXPIRED -> days != null && days < 0
-        }
-    }
-
     Column(Modifier.fillMaxSize()) {
-        Text(
-            "Clientes",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 25.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-        )
-        OutlinedTextField(
-            value = search,
-            onValueChange = onSearch,
-            label = { Text("Buscar nome, identificador, código ou usuário") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ClientFilter.entries.forEach { option ->
-                FilterChip(
-                    selected = filter == option,
-                    onClick = { filter = option },
-                    label = { Text(option.label) }
-                )
-            }
-        }
-
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (filtered.isEmpty()) item { EmptyCard("Nenhum cliente encontrado neste filtro.") }
-            items(filtered, key = { it.deviceId }) { device ->
-                ClientCard(device) { onOpen(device) }
-            }
+        Text("Clientes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Buscar cliente ou código") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            if (clients.isEmpty()) item { EmptyCard("Nenhum cliente encontrado.") }
+            items(clients, key = { it.deviceId }) { d -> ClientCard(d) { onOpen(d) } }
         }
     }
 }
@@ -616,47 +447,13 @@ private fun ClientsTab(
 @Composable
 private fun ClientCard(device: AdminDevice, onClick: () -> Unit) {
     val meta = ClientMetaCodec.decode(device.label)
-    val days = ClientMetaCodec.daysUntil(meta.expiresIso)
-    val expiryText = ClientMetaCodec.isoToDisplay(meta.expiresIso)
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    ) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    meta.name.ifBlank { "Sem nome" },
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text("Código ${device.pairingCode} • ${device.platform ?: "Android"}", color = Muted, fontSize = 11.sp)
-                meta.identifier?.let {
-                    Text("Identificador: $it", color = Cyan, fontSize = 11.sp)
-                }
-                expiryText?.let {
-                    val color = when {
-                        days == null -> Muted
-                        days < 0 -> Danger
-                        days <= 7 -> Purple
-                        else -> Green
-                    }
-                    val suffix = when {
-                        days == null -> ""
-                        days < 0 -> " • vencido"
-                        days == 0 -> " • vence hoje"
-                        days <= 7 -> " • vence em $days dia(s)"
-                        else -> ""
-                    }
-                    Text("Vencimento: $it$suffix", color = color, fontSize = 11.sp)
-                }
-                playlistUsername(device.playlistUrl)?.let {
-                    Text("Usuário da lista: $it", color = Muted, fontSize = 10.sp)
-                }
+                Text(meta.name.ifBlank { "Cliente" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Código ${device.pairingCode} • ${device.platform ?: "Android"}", color = Muted, fontSize = 10.sp)
+                ClientMetaCodec.isoToDisplay(meta.expiresIso)?.let { Text("Lista vence: $it", color = Cyan, fontSize = 10.sp) }
+                playlistUsername(device.playlistUrl)?.let { Text("Usuário: $it", color = Muted, fontSize = 10.sp) }
             }
             StatusPill(device.enabled)
         }
@@ -665,350 +462,212 @@ private fun ClientCard(device: AdminDevice, onClick: () -> Unit) {
 
 @Composable
 private fun StatusPill(enabled: Boolean) {
-    Surface(
-        color = if (enabled) Green.copy(alpha = 0.16f) else Danger.copy(alpha = 0.16f),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Text(
-            if (enabled) "ATIVO" else "BLOQUEADO",
-            color = if (enabled) Green else Danger,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-        )
+    Surface(color = if (enabled) Green.copy(alpha = .16f) else Danger.copy(alpha = .16f), shape = RoundedCornerShape(20.dp)) {
+        Text(if (enabled) "ATIVO" else "BLOQUEADO", color = if (enabled) Green else Danger, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
     }
 }
 
 @Composable
-private fun ActivateDialog(
-    device: AdminDevice,
-    token: String,
-    repo: AdminRepository,
-    onDismiss: () -> Unit,
-    onSaved: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf("") }
-    var identifier by remember { mutableStateOf("") }
-    var expiryInput by remember { mutableStateOf("") }
-    var playlist by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var detecting by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    fun detectExpiry() {
-        if (playlist.isBlank()) return
-        detecting = true
-        error = null
-        scope.launch {
-            try {
-                val iso = withContext(Dispatchers.IO) { repo.detectExpiryIso(playlist.trim()) }
-                if (iso != null) {
-                    expiryInput = ClientMetaCodec.isoToDisplay(iso).orEmpty()
-                } else {
-                    error = "O servidor não informou uma data de vencimento. Você pode preencher manualmente."
+private fun PartnersTab(partners: List<PartnerInfo>, onNew: () -> Unit, onGrant: (PartnerInfo) -> Unit) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text("Parceiros", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+            Text("Cada parceiro usa este mesmo app ADM, mas só enxerga os próprios clientes.", color = Muted, fontSize = 12.sp)
+            Button(onClick = onNew, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("Cadastrar parceiro") }
+        }
+        if (partners.isEmpty()) item { EmptyCard("Nenhum parceiro cadastrado.") }
+        items(partners, key = { it.id }) { p ->
+            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(15.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text("Login: ${p.loginCode} • ${p.clients} cliente(s)", color = Muted, fontSize = 10.sp)
+                        }
+                        Text("${p.credits} CR", color = Cyan, fontWeight = FontWeight.Black)
+                    }
+                    Text("Chave ADM: ${p.accessToken}", color = Purple, fontSize = 10.sp, maxLines = 2)
+                    OutlinedButton(onClick = { onGrant(p) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Adicionar créditos") }
                 }
-            } catch (e: Throwable) {
-                error = "Não foi possível consultar o vencimento agora."
-            } finally {
-                detecting = false
             }
         }
     }
+}
 
+@Composable
+private fun CreditsTab(profile: AdminProfile?, history: List<CreditEntry>) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text("Créditos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+            Text("Saldo atual: ${profile?.credits ?: 0}", color = Cyan, fontWeight = FontWeight.Black, fontSize = 30.sp)
+            Text("Ativação anual: ${profile?.annualLicenseCredits ?: 15} créditos por aparelho.", color = Muted, fontSize = 11.sp)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Purple.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(15.dp)) {
+                    Text("Pix automático Asaas", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("A estrutura já está preparada para compra automática. A liberação do Pix será ativada quando a chave da API Asaas for configurada no servidor.", color = Muted, fontSize = 11.sp)
+                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("Comprar créditos por Pix — em preparação") }
+                }
+            }
+        }
+        item { Text("Histórico", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
+        if (history.isEmpty()) item { EmptyCard("Nenhuma movimentação ainda.") }
+        items(history) { h ->
+            Card(colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (h.amount >= 0) "+${h.amount}" else h.amount.toString(), color = if (h.amount >= 0) Green else Danger, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text(h.kind, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        h.note?.let { Text(it, color = Muted, fontSize = 10.sp) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdatesTab(info: AdminUpdateInfo?, checking: Boolean, busy: Boolean, error: String?, onCheck: () -> Unit, onInstall: (AdminUpdateInfo) -> Unit) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Atualizações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+            Text("VPlayo ADM ${BuildConfig.VERSION_NAME}", color = Muted)
+            Button(onClick = onCheck, enabled = !checking && !busy, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text(if (checking) "Verificando..." else "Verificar atualização") }
+            error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+        }
+        info?.let { u ->
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Versão ${u.versionName}", color = Cyan, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(u.message, color = Muted, fontSize = 11.sp)
+                        Button(onClick = { onInstall(u) }, enabled = !busy, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text(if (busy) "Baixando..." else "Baixar e instalar") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewPartnerDialog(token: String, repo: AdminRepository, onDismiss: () -> Unit, onCreated: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<PartnerInfo?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ativar ${device.pairingCode}") },
+        title = { Text(if (result == null) "Novo parceiro" else "Parceiro criado") },
         text = {
             Column {
-                Text(
-                    "O código já veio do aparelho. Complete apenas os dados do cliente.",
-                    color = Muted,
-                    fontSize = 12.sp
-                )
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome do cliente/aparelho") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                )
-                OutlinedTextField(
-                    value = identifier,
-                    onValueChange = { identifier = it },
-                    label = { Text("Identificador interno (opcional)") },
-                    supportingText = { Text("Ex.: Rany, Sala, Cliente 004") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                OutlinedTextField(
-                    value = playlist,
-                    onValueChange = { playlist = it.trim() },
-                    label = { Text("URL M3U") },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                playlistUsername(playlist)?.let {
-                    Text("Usuário detectado: $it", color = Cyan, fontSize = 11.sp)
+                if (result == null) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome do parceiro/revenda") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                } else {
+                    Text("${result!!.name}\nLogin: ${result!!.loginCode}\nChave ADM: ${result!!.accessToken}", color = Color.White)
+                    Text("Guarde a chave. Ela dá acesso somente aos clientes deste parceiro.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
                 }
-
-                OutlinedTextField(
-                    value = expiryInput,
-                    onValueChange = { expiryInput = it },
-                    label = { Text("Vencimento (DD/MM/AAAA)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                TextButton(
-                    onClick = { detectExpiry() },
-                    enabled = playlist.isNotBlank() && !detecting
-                ) {
-                    Text(if (detecting) "Consultando..." else "Detectar vencimento da lista")
-                }
-
-                error?.let {
-                    Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-                }
+                error?.let { Text(it, color = Danger, fontSize = 11.sp) }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isBlank() || playlist.isBlank()) {
-                        error = "Preencha nome e lista."
-                        return@Button
-                    }
-                    val expiryIso = ClientMetaCodec.inputToIso(expiryInput)
-                    if (expiryInput.isNotBlank() && expiryIso == null) {
-                        error = "Data inválida. Use DD/MM/AAAA."
-                        return@Button
-                    }
+            if (result != null) Button(onClick = onCreated) { Text("Concluir") }
+            else Button(onClick = {
+                if (name.isBlank()) return@Button
+                busy = true
+                scope.launch {
+                    try { result = withContext(Dispatchers.IO) { repo.createPartner(token, name) } }
+                    catch (e: Throwable) { error = e.message ?: "Falha ao criar parceiro" }
+                    finally { busy = false }
+                }
+            }, enabled = !busy) { Text(if (busy) "Criando..." else "Criar") }
+        },
+        dismissButton = { if (result == null) TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
 
-                    busy = true
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                repo.claim(
-                                    token = token,
-                                    code = device.pairingCode,
-                                    name = name.trim(),
-                                    identifier = identifier.trim().takeIf { it.isNotBlank() },
-                                    expiresIso = expiryIso,
-                                    playlist = playlist.trim()
-                                )
-                            }
-                            onSaved()
-                        } catch (e: Throwable) {
-                            error = (e.message ?: "Falha ao ativar").take(120)
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-                enabled = !busy
-            ) {
-                Text(if (busy) "Ativando..." else "Ativar")
+@Composable
+private fun GrantCreditsDialog(partner: PartnerInfo, token: String, repo: AdminRepository, onDismiss: () -> Unit, onSaved: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var amount by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Créditos • ${partner.name}") },
+        text = {
+            Column {
+                Text("Saldo atual: ${partner.credits}", color = Cyan, fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = amount, onValueChange = { amount = it.filter(Char::isDigit).take(6) }, label = { Text("Quantidade a adicionar") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                error?.let { Text(it, color = Danger, fontSize = 11.sp) }
             }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val n = amount.toIntOrNull() ?: return@Button
+                busy = true
+                scope.launch {
+                    try { withContext(Dispatchers.IO) { repo.grantCredits(token, partner.id, n) }; onSaved() }
+                    catch (e: Throwable) { error = e.message ?: "Falha ao adicionar créditos" }
+                    finally { busy = false }
+                }
+            }, enabled = !busy && (amount.toIntOrNull() ?: 0) > 0) { Text(if (busy) "Salvando..." else "Adicionar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 
 @Composable
-private fun EditDialog(
-    device: AdminDevice,
-    token: String,
-    repo: AdminRepository,
-    onDismiss: () -> Unit,
-    onChanged: () -> Unit
-) {
+private fun EditClientDialog(device: AdminDevice, token: String, repo: AdminRepository, onDismiss: () -> Unit, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val initialMeta = remember(device.deviceId, device.label) { ClientMetaCodec.decode(device.label) }
-
-    var name by remember { mutableStateOf(initialMeta.name) }
-    var identifier by remember { mutableStateOf(initialMeta.identifier.orEmpty()) }
-    var expiryInput by remember { mutableStateOf(ClientMetaCodec.isoToDisplay(initialMeta.expiresIso).orEmpty()) }
+    val meta = remember(device.deviceId) { ClientMetaCodec.decode(device.label) }
+    var name by remember { mutableStateOf(meta.name) }
+    var identifier by remember { mutableStateOf(meta.identifier.orEmpty()) }
+    var expiry by remember { mutableStateOf(ClientMetaCodec.isoToDisplay(meta.expiresIso).orEmpty()) }
     var playlist by remember { mutableStateOf(device.playlistUrl.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
-    var detecting by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
-    fun expiryIsoOrError(): String? {
-        val parsed = ClientMetaCodec.inputToIso(expiryInput)
-        if (expiryInput.isNotBlank() && parsed == null) {
-            error = "Data inválida. Use DD/MM/AAAA."
-        }
-        return parsed
-    }
-
-    fun runAction(block: suspend () -> Unit) {
-        busy = true
-        error = null
+    fun run(action: suspend () -> Unit) {
+        busy = true; error = null
         scope.launch {
-            try {
-                block()
-                onChanged()
-            } catch (e: Throwable) {
-                error = (e.message ?: "Falha na operação").take(120)
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    fun detectExpiry() {
-        if (playlist.isBlank()) return
-        detecting = true
-        error = null
-        scope.launch {
-            try {
-                val iso = withContext(Dispatchers.IO) { repo.detectExpiryIso(playlist.trim()) }
-                if (iso != null) {
-                    expiryInput = ClientMetaCodec.isoToDisplay(iso).orEmpty()
-                } else {
-                    error = "O servidor não informou a data de vencimento."
-                }
-            } catch (e: Throwable) {
-                error = "Não foi possível consultar o vencimento agora."
-            } finally {
-                detecting = false
-            }
+            try { action(); onChanged() }
+            catch (e: Throwable) { error = e.message ?: "Falha ao salvar" }
+            finally { busy = false }
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(name.ifBlank { "Cliente" }) },
+        title = { Text(device.pairingCode) },
         text = {
             Column {
-                Text("Código ${device.pairingCode}", color = Cyan, fontWeight = FontWeight.Bold)
-                Text(device.platform ?: "Android", color = Muted, fontSize = 11.sp)
-                playlistUsername(playlist)?.let { Text("Usuário da lista: $it", color = Muted, fontSize = 11.sp) }
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                )
-                OutlinedTextField(
-                    value = identifier,
-                    onValueChange = { identifier = it },
-                    label = { Text("Identificador interno") },
-                    supportingText = { Text("Só aparece no seu ADM") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                OutlinedTextField(
-                    value = playlist,
-                    onValueChange = { playlist = it.trim() },
-                    label = { Text("URL M3U") },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                OutlinedTextField(
-                    value = expiryInput,
-                    onValueChange = { expiryInput = it },
-                    label = { Text("Vencimento (DD/MM/AAAA)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
-                TextButton(
-                    onClick = { detectExpiry() },
-                    enabled = playlist.isNotBlank() && !detecting
-                ) {
-                    Text(if (detecting) "Consultando..." else "Atualizar vencimento pela lista")
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = identifier, onValueChange = { identifier = it }, label = { Text("Identificação") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(value = playlist, onValueChange = { playlist = it }, label = { Text("Lista M3U") }, minLines = 2, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(value = expiry, onValueChange = { expiry = it }, label = { Text("Vencimento da lista") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        val iso = ClientMetaCodec.inputToIso(expiry)
+                        run { withContext(Dispatchers.IO) { repo.update(token, device.deviceId, !device.enabled, playlist, name, identifier.takeIf { it.isNotBlank() }, iso) } }
+                    }, enabled = !busy, modifier = Modifier.weight(1f)) { Text(if (device.enabled) "Bloquear" else "Liberar") }
+                    OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger)) { Text("Excluir") }
                 }
-
-                error?.let {
-                    Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            val expiryIso = expiryIsoOrError()
-                            if (expiryInput.isNotBlank() && expiryIso == null) return@OutlinedButton
-                            runAction {
-                                withContext(Dispatchers.IO) {
-                                    repo.update(
-                                        token = token,
-                                        deviceId = device.deviceId,
-                                        enabled = !device.enabled,
-                                        playlist = playlist,
-                                        name = name,
-                                        identifier = identifier.trim().takeIf { it.isNotBlank() },
-                                        expiresIso = expiryIso
-                                    )
-                                }
-                            }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (device.enabled) "Bloquear" else "Liberar")
-                    }
-
-                    OutlinedButton(
-                        onClick = { confirmDelete = true },
-                        enabled = !busy,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Excluir")
-                    }
-                }
-
                 if (confirmDelete) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.12f)),
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text("Excluir este aparelho da sua lista?", color = Color.White, fontWeight = FontWeight.Bold)
-                            Row {
-                                TextButton(onClick = { confirmDelete = false }) { Text("Cancelar") }
-                                TextButton(onClick = {
-                                    runAction {
-                                        withContext(Dispatchers.IO) { repo.delete(token, device.deviceId) }
-                                    }
-                                }) {
-                                    Text("Confirmar exclusão", color = Danger)
-                                }
-                            }
-                        }
-                    }
+                    Text("Confirme a exclusão abaixo.", color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                    Button(onClick = { run { withContext(Dispatchers.IO) { repo.delete(token, device.deviceId) } } }, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) { Text("Confirmar exclusão") }
                 }
+                error?.let { Text(it, color = Danger, fontSize = 11.sp) }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val expiryIso = expiryIsoOrError()
-                    if (expiryInput.isNotBlank() && expiryIso == null) return@Button
-                    runAction {
-                        withContext(Dispatchers.IO) {
-                            repo.update(
-                                token = token,
-                                deviceId = device.deviceId,
-                                enabled = device.enabled,
-                                playlist = playlist,
-                                name = name,
-                                identifier = identifier.trim().takeIf { it.isNotBlank() },
-                                expiresIso = expiryIso
-                            )
-                        }
-                    }
-                },
-                enabled = !busy
-            ) {
-                Text(if (busy) "Salvando..." else "Salvar")
-            }
+            Button(onClick = {
+                val iso = ClientMetaCodec.inputToIso(expiry)
+                if (expiry.isNotBlank() && iso == null) { error = "Data inválida"; return@Button }
+                run { withContext(Dispatchers.IO) { repo.update(token, device.deviceId, device.enabled, playlist, name, identifier.takeIf { it.isNotBlank() }, iso) } }
+            }, enabled = !busy) { Text(if (busy) "Salvando..." else "Salvar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
     )
@@ -1017,17 +676,17 @@ private fun EditDialog(
 @Composable
 private fun EmptyCard(text: String) {
     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(text, color = Muted, modifier = Modifier.padding(18.dp))
+        Text(text, color = Muted, modifier = Modifier.padding(16.dp))
     }
 }
 
 private fun playlistUsername(url: String?): String? {
     if (url.isNullOrBlank()) return null
-    val query = url.substringAfter('?', "")
-    if (query.isBlank()) return null
-    val raw = query.split('&')
-        .firstOrNull { it.startsWith("username=", ignoreCase = true) }
-        ?.substringAfter('=')
-        ?: return null
-    return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw).takeIf { it.isNotBlank() }
+    return runCatching {
+        val query = url.substringAfter('?', "")
+        query.split('&').firstOrNull { it.startsWith("username=") }
+            ?.substringAfter('=')
+            ?.let { URLDecoder.decode(it, "UTF-8") }
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 }

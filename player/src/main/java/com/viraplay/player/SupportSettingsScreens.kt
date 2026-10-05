@@ -74,7 +74,7 @@ fun ActivationScreen(
                 Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Ative seu dispositivo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Envie este código ao suporte ViraPlay.", color = VpMuted, fontSize = 14.sp)
+                    Text("Envie este código ao suporte VPlayo.", color = VpMuted, fontSize = 14.sp)
                     Spacer(Modifier.height(20.dp))
                     Surface(color = VpPanelAlt, shape = RoundedCornerShape(18.dp)) {
                         Text(
@@ -164,7 +164,7 @@ fun SupportScreen(code: String, isTv: Boolean, onBack: () -> Unit) {
                                 }
                             }
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                                Text("Suporte ViraPlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                                Text("Suporte VPlayo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
                                 Spacer(Modifier.height(6.dp))
                                 Text("Aponte a câmera do celular para o QR Code", color = VpCyan, fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(14.dp))
@@ -181,7 +181,7 @@ fun SupportScreen(code: String, isTv: Boolean, onBack: () -> Unit) {
                         }
                     } else {
                         Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Suporte ViraPlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                            Text("Suporte VPlayo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
                             Spacer(Modifier.height(12.dp))
                             qrBitmap?.let { bmp ->
                                 Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
@@ -273,7 +273,7 @@ fun SettingsScreen(
                 installingUpdate = false
                 when (updateManager.launchInstaller(apk)) {
                     InstallLaunchResult.STARTED -> {
-                        updateStatus = "Instalador aberto. Conclua a atualização do ViraPlay."
+                        updateStatus = "Instalador aberto. Conclua a atualização do VPlayo."
                     }
                     InstallLaunchResult.NEED_PERMISSION -> {
                         updateStatus = "Autorize a instalação de apps desta fonte e volte para tentar novamente."
@@ -301,12 +301,12 @@ fun SettingsScreen(
             }
 
             Text("Configurações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 28.sp)
-            Text("Informações e preferências do seu ViraPlay", color = VpMuted, fontSize = 12.sp)
+            Text("Informações e preferências do seu VPlayo", color = VpMuted, fontSize = 12.sp)
 
             SettingsCard("Status", status)
             SettingsCard("Código do aparelho", code)
             accessText?.let { SettingsCard("Vencimento", it) }
-            SettingsCard("Versão", "ViraPlay ${BuildConfig.VERSION_NAME}")
+            SettingsCard("Versão", "VPlayo ${BuildConfig.VERSION_NAME}")
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = VpPanel),
@@ -423,7 +423,7 @@ fun SettingsScreen(
             }
 
             Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("Atualizar catálogo") }
-            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte ViraPlay") }
+            OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte VPlayo") }
             Spacer(Modifier.height(20.dp))
         }
     }

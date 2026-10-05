@@ -1,4 +1,4 @@
-ViraPlay 3.3.4 PREMIUM FINAL - TV + CELULAR
+VPlayo 3.3.4 PREMIUM FINAL - TV + CELULAR
 versionCode: 37
 versionName: 3.3.4
 
@@ -27,7 +27,7 @@ CELULAR
 
 PUBLICAÇÃO
 1. Envie este ZIP na raiz do repositório viraplay-android.
-2. Rode: Importar projeto ViraPlay.
+2. Rode: Importar projeto VPlayo.
 3. Primeiro gere/teste a build antes de publicar para todos.
 4. Na publicação use versionCode 37 e versionName 3.3.4.
 

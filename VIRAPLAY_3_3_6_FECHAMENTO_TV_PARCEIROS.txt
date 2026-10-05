@@ -1,0 +1,69 @@
+VPlayo 3.3.6 - FECHAMENTO TV + BASE DE PARCEIROS
+versionCode: 39
+versionName: 3.3.6
+
+OBJETIVO DESTA VERSAO
+Fechar os principais pontos restantes da TV/celular e preparar o VPlayo ADM para parceria com revendedores sem quebrar os clientes atuais.
+
+TV / PLAYER
+- Player da TV passa a usar TextureView para evitar a camada/cinza causada pela composicao SurfaceView + Compose em algumas TVs.
+- Fundo/shutter continuam em preto real.
+- Ajustar / Zoom / Preencher agora aplica resizeMode + videoScalingMode e forca relayout do video.
+- Controles TV ficaram menores e menos invasivos.
+- Barra de progresso ficou mais compacta.
+- HTTP do player aceita redirecionamento entre protocolos e envia User-Agent VPlayo, melhorando compatibilidade com alguns servidores.
+- Decoder fallback continua ativo.
+- Home TV recebeu margens mais seguras para 720p e a logomarca foi reduzida para nao cortar.
+
+CELULAR / SPLASH
+- Remove o quadrado grande da abertura.
+- Splash nativo usa a logo transparente.
+- Depois entra uma animacao curta VPlayo com fade + zoom e fundo escuro.
+- Icone do launcher usa a logo transparente dentro de area segura.
+
+ESCALA / BACKEND
+- Depois de um aparelho ja estar ativo, a configuracao fica em cache por ate 6 horas.
+- O botao Atualizar continua forçando consulta imediata.
+- Isso reduz muito consultas desnecessarias ao backend em uma futura base grande de clientes.
+
+PARCEIROS / ADM
+- Mesmo APK ADM para MASTER e PARCEIRO.
+- MASTER continua com os clientes atuais (partner_id NULL).
+- Parceiro usa chave propria e so enxerga os clientes vinculados a ele.
+- Cliente novo nao aparece em pendentes para todos os parceiros.
+- Parceiro digita o codigo recebido do cliente em Ativar aparelho.
+- O primeiro parceiro que ativar o codigo vincula o aparelho ao proprio partner_id.
+- Parceiro A nao consegue ativar aparelho ja vinculado ao Parceiro B.
+- MASTER pode cadastrar parceiros e adicionar creditos.
+- Parceiro ve saldo e historico de creditos.
+- Licenca anual configurada por padrao em 15 creditos por aparelho (pode ser alterada por variavel no Worker).
+- Ativacao do parceiro desconta creditos de forma atomica no banco.
+
+ASAAS
+- Estrutura de pagamentos e webhook preparada, MAS compra automatica fica desativada nesta versao.
+- Nenhuma chave Asaas deve ir dentro do APK.
+- Depois da conta criada, configurar no Worker: ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN.
+
+IMPORTANTE - PARA TESTAR PARCEIRO
+A importacao do ZIP atualiza o Android e coloca os arquivos do servidor no repositorio, mas o GitHub atual NAO possui workflow automatico de deploy do Worker.
+Antes do teste de parceiro:
+1. Execute server/supabase_schema.sql no SQL Editor do Supabase.
+2. Atualize o Cloudflare Worker com server/worker.js.
+3. Mantenha ADMIN_TOKEN, SUPABASE_URL e SUPABASE_SERVICE_ROLE atuais.
+4. Adicione a variavel opcional ANNUAL_LICENSE_CREDITS=15.
+5. Abra o VPlayo ADM MASTER, cadastre um parceiro de teste e adicione creditos.
+6. Entre novamente no mesmo APK ADM usando a chave gerada para o parceiro.
+7. Instale VPlayo em um aparelho novo, envie o codigo ao parceiro e ative pelo menu Ativar.
+
+CLIENTES ATUAIS
+Os clientes atuais nao ganham partner_id durante a migracao. Eles continuam como clientes MASTER, com atualizacao pelo proprio aplicativo e sem consumo de credito.
+
+PLAY STORE
+Esta versao mantem o atualizador direto porque os clientes atuais dependem dele. Para envio ao Google Play sera gerada uma variante STORE/AAB sem REQUEST_INSTALL_PACKAGES e sem atualizacao externa, preservando a variante direta para os clientes existentes.
+
+TESTE ANTES DE PUBLICAR
+1. Importar este ZIP.
+2. Rodar Build VPlayo APKs.
+3. Instalar 3.3.6 na sua TV e no celular.
+4. Testar imagem cinza, Ajustar/Zoom/Preencher, filmes que davam erro, splash e navegacao.
+5. So depois publicar para os clientes.

@@ -2,11 +2,11 @@ VIRAPLAY 3.1 BETA — PACOTE CONSOLIDADO PARA TESTE REAL
 
 OBJETIVO
 Esta versão foi preparada para teste prático em celular e Android TV/TV Box,
-sem alterar a base funcional da ViraPlay 3.0 que já reproduz canais rapidamente.
+sem alterar a base funcional da VPlayo 3.0 que já reproduz canais rapidamente.
 
 PRINCIPAIS MUDANÇAS DO CLIENTE
-- Novo ícone do ViraPlay com fundo premium azul/roxo.
-- Identidade ViraPlay com selo BETA discreto junto à marca.
+- Novo ícone do VPlayo com fundo premium azul/roxo.
+- Identidade VPlayo com selo BETA discreto junto à marca.
 - Navegação mobile com ícones profissionais e acabamento visual refinado.
 - Removida da interface qualquer exibição de domínio/fonte/servidor.
 - Configurações mostram somente status, código, vencimento quando disponível,
@@ -18,11 +18,11 @@ PRINCIPAIS MUDANÇAS DO CLIENTE
 - TV ao vivo: Canal anterior e Próximo canal sem voltar à lista.
 - Mantidos Favoritos, Continuar assistindo e progresso de filmes/episódios.
 - Mantido cache local para abertura rápida do catálogo.
-- Suporte ViraPlay via WhatsApp: +55 84 9927-6322.
+- Suporte VPlayo via WhatsApp: +55 84 9927-6322.
 
 PRINCIPAIS MUDANÇAS DO ADM
 - Mantida a estrutura Painel / Pendentes / Clientes aprovada na versão 3.0.
-- Novo ícone exclusivo ViraPlay ADM.
+- Novo ícone exclusivo VPlayo ADM.
 - Campo Identificador interno por cliente.
 - Campo Vencimento por cliente.
 - O vencimento pode ser digitado ou detectado automaticamente pela lista Xtream.

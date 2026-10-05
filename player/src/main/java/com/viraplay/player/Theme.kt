@@ -14,7 +14,7 @@ val VpMuted = Color(0xFF9AA8C0)
 val VpBorder = Color(0xFF334D72)
 val VpSoft = Color(0xFF12203A)
 
-val ViraPlayColors = darkColorScheme(
+val VPlayoColors = darkColorScheme(
     primary = VpCyan,
     secondary = VpPurple,
     background = VpBg,

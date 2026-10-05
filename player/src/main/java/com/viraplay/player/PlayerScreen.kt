@@ -3,6 +3,7 @@ package com.viraplay.player
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.View
+import android.view.LayoutInflater
 import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -30,12 +31,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.viraplay.shared.ContentType
@@ -59,6 +63,23 @@ private fun formatPlayerTime(ms: Long): String {
     else "%02d:%02d".format(minutes, seconds)
 }
 
+@androidx.media3.common.util.UnstableApi
+private fun applyPlayerScreenMode(player: ExoPlayer, view: PlayerView?, index: Int) {
+    val mode = screenModes[index.coerceIn(screenModes.indices)]
+    view?.let { pv ->
+        pv.resizeMode = mode.resizeMode
+        pv.videoSurfaceView?.requestLayout()
+        pv.requestLayout()
+        pv.invalidate()
+    }
+    player.videoScalingMode =
+        if (mode.resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
+            C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+        } else {
+            C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+        }
+}
+
 
 @Composable
 private fun TvPlayerControl(
@@ -68,10 +89,10 @@ private fun TvPlayerControl(
 ) {
     FocusTile(
         onClick = onClick,
-        modifier = modifier.height(44.dp).widthIn(min = 105.dp, max = 190.dp)
+        modifier = modifier.height(36.dp).widthIn(min = 78.dp, max = 142.dp)
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
+        Box(Modifier.fillMaxSize().padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, maxLines = 1)
         }
     }
 }
@@ -119,7 +140,14 @@ fun PlayerScreen(
     val player = remember(item.itemKey) {
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
-        ExoPlayer.Builder(context, renderersFactory).build().apply {
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
+            .setAllowCrossProtocolRedirects(true)
+        val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
+        ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
             addListener(object : Player.Listener {
                 override fun onPlayerError(playbackException: PlaybackException) {
                     val raw = playbackException.message ?: "Falha na fonte de vídeo"
@@ -127,7 +155,7 @@ fun PlayerScreen(
                         raw.contains("403", true) || raw.contains("401", true) ->
                             "O servidor recusou esta reprodução. Verifique se a conta já está em uso em outro aparelho."
                         raw.contains("MediaCodec", true) || raw.contains("VideoRenderer", true) || raw.contains("Decoder", true) ->
-                            "Esta TV não conseguiu decodificar este vídeo. O ViraPlay tentou um decodificador alternativo; tente novamente ou escolha outra fonte/qualidade."
+                            "Esta TV não conseguiu decodificar este vídeo. O VPlayo tentou um decodificador alternativo; tente novamente ou escolha outra fonte/qualidade."
                         else -> "Não foi possível reproduzir este conteúdo nesta TV. Tente novamente."
                     }
                 }
@@ -299,7 +327,7 @@ fun PlayerScreen(
         delay(80)
         if (controlsVisible) {
             runCatching { controlsFocus.requestFocus() }
-            delay(7_000)
+            delay(5_500)
             controlsVisible = false
         } else {
             runCatching { videoFocus.requestFocus() }
@@ -406,7 +434,16 @@ fun PlayerScreen(
         ) {
             AndroidView(
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
+                    val view = if (isTv) {
+                        LayoutInflater.from(ctx).inflate(
+                            R.layout.player_view_tv,
+                            null,
+                            false
+                        ) as PlayerView
+                    } else {
+                        PlayerView(ctx)
+                    }
+                    view.apply {
                         playerViewRef = this
                         this.player = player
                         useController = !isTv
@@ -422,7 +459,7 @@ fun PlayerScreen(
                         setKeepContentOnPlayerReset(true)
                         alpha = 1f
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                        resizeMode = screenModes[screenModeIndex].resizeMode
+                        applyPlayerScreenMode(player, this, screenModeIndex)
                         if (!isTv) {
                             setControllerVisibilityListener(
                                 PlayerView.ControllerVisibilityListener { visibility ->
@@ -435,11 +472,9 @@ fun PlayerScreen(
                 update = { view ->
                     playerViewRef = view
                     view.player = player
-                    view.resizeMode = screenModes[screenModeIndex].resizeMode
-                    view.requestLayout()
-                    view.invalidate()
+                    applyPlayerScreenMode(player, view, screenModeIndex)
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().background(Color.Black)
             )
 
             AnimatedVisibility(
@@ -447,13 +482,13 @@ fun PlayerScreen(
                 modifier = Modifier.align(if (isTv) Alignment.BottomCenter else Alignment.TopCenter)
             ) {
                 Surface(
-                    color = Color.Black.copy(alpha = if (isTv) 0.90f else 0.82f),
-                    shape = if (isTv) RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp) else RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
+                    color = Color.Black.copy(alpha = if (isTv) 0.78f else 0.82f),
+                    shape = if (isTv) RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp) else RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = if (isTv) 7.dp else 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTv) 5.dp else 8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (isTv) {
@@ -474,6 +509,7 @@ fun PlayerScreen(
                                 channelBaseName(currentItem.name),
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
+                                fontSize = if (isTv) 12.sp else 14.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
@@ -503,11 +539,7 @@ fun PlayerScreen(
                                 }
                                 TvPlayerControl("Tela: ${screenModes[screenModeIndex].label}", {
                                     screenModeIndex = (screenModeIndex + 1) % screenModes.size
-                                    playerViewRef?.let { pv ->
-                                        pv.resizeMode = screenModes[screenModeIndex].resizeMode
-                                        pv.requestLayout()
-                                        pv.invalidate()
-                                    }
+                                    applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
                                     controlsVisible = true
                                 })
                                 if (currentItem.type == ContentType.LIVE) {
@@ -523,11 +555,7 @@ fun PlayerScreen(
                                 AssistChip(
                                     onClick = {
                                         screenModeIndex = (screenModeIndex + 1) % screenModes.size
-                                        playerViewRef?.let { pv ->
-                                            pv.resizeMode = screenModes[screenModeIndex].resizeMode
-                                            pv.requestLayout()
-                                            pv.invalidate()
-                                        }
+                                        applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
                                     },
                                     label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
                                 )
@@ -553,7 +581,7 @@ fun PlayerScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(7.dp)
+                                        .height(if (isTv) 5.dp else 7.dp)
                                         .background(VpSoft, RoundedCornerShape(50))
                                 ) {
                                     Box(

@@ -17,13 +17,6 @@ class ContentRepository(
     private val xtream = XtreamSync()
     private val m3u = M3uSync()
 
-    private data class CachedEpg(
-        val storedAt: Long,
-        val items: List<EpgProgram>
-    )
-
-    private val epgCache = mutableMapOf<String, CachedEpg>()
-
     fun registerIfNeeded(identity: DeviceIdentity, platform: String, force: Boolean = false) {
         val now = System.currentTimeMillis()
         val last = prefs.getLong("last_register", 0L)
@@ -39,16 +32,50 @@ class ContentRepository(
         prefs.edit().putLong("last_register", now).apply()
     }
 
-    fun config(identity: DeviceIdentity): DeviceConfig {
+    fun config(identity: DeviceIdentity, force: Boolean = false): DeviceConfig {
+        val now = System.currentTimeMillis()
+        val cachedEnabled = prefs.getBoolean("config_enabled", false)
+        val cachedUrl = prefs.getString("config_playlist_url", null)
+        val cachedName = prefs.getString("config_playlist_name", null)
+        val cachedAt = prefs.getLong("config_cached_at", 0L)
+
+        // Depois de ativado, evita consultas desnecessárias ao nosso backend:
+        // o aparelho usa a configuração local por até 6 horas.
+        if (
+            !force &&
+            cachedEnabled &&
+            !cachedUrl.isNullOrBlank() &&
+            cachedAt > 0L &&
+            now - cachedAt < 6L * 60L * 60L * 1000L
+        ) {
+            return DeviceConfig(true, cachedUrl, cachedName)
+        }
+
         val id = URLEncoder.encode(identity.deviceId, "UTF-8")
         val secret = URLEncoder.encode(identity.deviceSecret, "UTF-8")
-        return Http.parseDeviceConfig(
-            Http.getText(
-                "${AppConfig.SERVER_BASE_URL}/api/config?device_id=$id&secret=$secret",
-                maxChars = 250_000
+        return runCatching {
+            Http.parseDeviceConfig(
+                Http.getText(
+                    "${AppConfig.SERVER_BASE_URL}/api/config?device_id=$id&secret=$secret",
+                    maxChars = 250_000
+                )
             )
-        )
+        }.onSuccess { cfg ->
+            prefs.edit()
+                .putBoolean("config_enabled", cfg.enabled)
+                .putString("config_playlist_url", cfg.playlistUrl)
+                .putString("config_playlist_name", cfg.playlistName)
+                .putLong("config_cached_at", now)
+                .apply()
+        }.getOrElse {
+            if (cachedEnabled && !cachedUrl.isNullOrBlank()) {
+                DeviceConfig(true, cachedUrl, cachedName)
+            } else {
+                throw it
+            }
+        }
     }
+
 
     fun accountInfo(playlistUrl: String): XtreamAccountInfo? =
         runCatching { XtreamAccountClient.fetchFromPlaylist(playlistUrl) }.getOrNull()
@@ -84,25 +111,6 @@ class ContentRepository(
     fun epg(item: CatalogItem): List<EpgProgram> {
         val sourceUrl = db.getMeta("playlist_url").orEmpty()
         val streamId = item.sourceId ?: return emptyList()
-        val cacheKey = "$sourceUrl|$streamId"
-        val now = System.currentTimeMillis()
-
-        synchronized(epgCache) {
-            val cached = epgCache[cacheKey]
-            if (cached != null) {
-                val ttl = if (cached.items.isEmpty()) 90_000L else 5L * 60L * 1000L
-                if (now - cached.storedAt < ttl) return cached.items
-            }
-        }
-
-        val fresh = runCatching { xtream.shortEpg(sourceUrl, streamId) }.getOrDefault(emptyList())
-        synchronized(epgCache) {
-            epgCache[cacheKey] = CachedEpg(now, fresh)
-            if (epgCache.size > 120) {
-                val oldest = epgCache.minByOrNull { it.value.storedAt }?.key
-                if (oldest != null) epgCache.remove(oldest)
-            }
-        }
-        return fresh
+        return xtream.shortEpg(sourceUrl, streamId)
     }
 }

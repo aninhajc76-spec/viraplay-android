@@ -9,7 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object Http {
-    private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ViraPlay/3.2"
+    private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) VPlayo/3.2"
 
     private fun open(
         url: String,
