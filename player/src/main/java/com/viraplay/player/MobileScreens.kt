@@ -234,8 +234,11 @@ private fun MobileLibrary(
 ) {
     val context = LocalContext.current
     val prefs = remember { PlaybackPreferences(context) }
+    val uiStore = remember { UiStateStore(context) }
     var categories by remember { mutableStateOf<List<CategoryEntry>>(emptyList()) }
-    var selectedCategory by remember(type) { mutableStateOf("ALL") }
+    var selectedCategory by remember(type) {
+        mutableStateOf(uiStore.category("mobile_${type.name}"))
+    }
     var search by remember(type) { mutableStateOf("") }
     var searchOpen by remember(type) { mutableStateOf(false) }
     var rawItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
@@ -280,14 +283,20 @@ private fun MobileLibrary(
             item {
                 FilterChip(
                     selected = selectedCategory == "ALL",
-                    onClick = { selectedCategory = "ALL" },
+                    onClick = {
+                        selectedCategory = "ALL"
+                        uiStore.setCategory("mobile_${type.name}", "ALL")
+                    },
                     label = { Text("Todos ($totalCount)") }
                 )
             }
             items(categories, key = { it.id }) { category ->
                 FilterChip(
                     selected = selectedCategory == category.id,
-                    onClick = { selectedCategory = category.id },
+                    onClick = {
+                        selectedCategory = category.id
+                        uiStore.setCategory("mobile_${type.name}", category.id)
+                    },
                     label = { Text("${category.name} (${category.count})", maxLines = 1) }
                 )
             }

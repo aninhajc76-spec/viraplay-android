@@ -1,0 +1,25 @@
+VPlayo 3.3.10 / versionCode 43
+
+Ajuste final antes do teste na TV.
+
+MANTIDO:
+- player imersivo da 3.3.9
+- modos Ajustar / Tela cheia / Preencher / Zoom+
+- seleção de áudio e preferência por português
+- barra de progresso interativa
+- MASTER sem créditos
+- aba Parceiros exclusiva do MASTER
+- logo/splash corrigidos
+
+CORREÇÕES DESTA VERSÃO:
+- voltou navegação Canal anterior / Próximo canal no player AO VIVO do celular
+- TV continua com Canal anterior / Próximo canal
+- ao sair de um canal AO VIVO, volta obrigatoriamente para a seção Ao vivo
+- no celular, a categoria escolhida (ex.: Telecine) fica salva
+- ao voltar do player, a categoria anterior é restaurada em vez de voltar para Todos/Início
+- aviso de Parceiros no ADM foi simplificado e tratado como configuração pendente, sem parecer erro do MASTER
+
+ÁUDIO:
+A correção de seleção de faixa da 3.3.9 foi mantida.
+Se Lanternas continuar sem áudio e houver somente uma faixa incompatível entregue pelo servidor,
+será necessário analisar o codec específico antes de incluir decoder nativo.

@@ -721,8 +721,16 @@ fun PlayerScreen(
                                 }
                                 if (currentItem.type == ContentType.LIVE) {
                                     AssistChip(
+                                        onClick = { changeLive(false); controlsVisible = true },
+                                        label = { Text("‹ Canal", fontSize = 11.sp) }
+                                    )
+                                    AssistChip(
                                         onClick = ::cycleQuality,
                                         label = { Text(if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState", fontSize = 11.sp) }
+                                    )
+                                    AssistChip(
+                                        onClick = { changeLive(true); controlsVisible = true },
+                                        label = { Text("Canal ›", fontSize = 11.sp) }
                                     )
                                 }
                             }

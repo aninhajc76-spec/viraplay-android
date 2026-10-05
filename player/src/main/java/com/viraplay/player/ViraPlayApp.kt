@@ -259,7 +259,12 @@ fun VPlayoApp() {
                     isTv = isTv,
                     startPosition = current.startPosition,
                     onBack = {
-                        if (current.item.type != ContentType.LIVE) playbackVersion += 1
+                        if (current.item.type == ContentType.LIVE) {
+                            section = MainSection.LIVE
+                            uiStore.setSection(MainSection.LIVE.name)
+                        } else {
+                            playbackVersion += 1
+                        }
                         overlay = null
                     }
                 )

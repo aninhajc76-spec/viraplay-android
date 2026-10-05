@@ -502,14 +502,14 @@ private fun PartnersTab(
 
             if (!backendReady) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = .10f)),
+                    colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text("Backend de parceiros ainda não ativado", color = Danger, fontWeight = FontWeight.Bold)
+                        Text("Configuração de parceiros pendente", color = Cyan, fontWeight = FontWeight.Bold)
                         Text(
-                            "Seu acesso já está identificado como MASTER, mas é preciso publicar o novo Worker e executar o SQL do Supabase para cadastrar parceiros.",
+                            "O painel MASTER já está correto. Falta apenas ativar a estrutura de parceiros no Worker e no Supabase para liberar novos cadastros.",
                             color = Muted,
                             fontSize = 11.sp
                         )
