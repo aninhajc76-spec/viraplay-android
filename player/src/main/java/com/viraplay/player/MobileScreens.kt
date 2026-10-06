@@ -27,11 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.viraplay.shared.ContentType
+import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,19 +58,28 @@ fun MobileShell(
     Scaffold(
         containerColor = VpBg,
         topBar = {
-            Box(
-                modifier = Modifier.fillMaxWidth().background(
-                    Brush.horizontalGradient(listOf(VpBg, VpPanel.copy(alpha = 0.92f), VpBg))
-                ).padding(horizontal = 14.dp, vertical = 9.dp)
+            Surface(
+                color = Color(0xF2020711),
+                tonalElevation = 8.dp
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     BrandWordmark()
                     Spacer(Modifier.weight(1f))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(accessNotice ?: status, color = if (accessNotice != null) VpCyan else VpMuted, fontSize = 9.sp, maxLines = 1)
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            IconButton(onClick = onRefresh) { Icon(Icons.Filled.Refresh, "Atualizar", tint = VpCyan) }
-                            IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Ajustes", tint = Color.White) }
+                    Surface(
+                        color = VpPanelAlt.copy(alpha = .72f),
+                        shape = RoundedCornerShape(50),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VpBorder.copy(alpha = .7f))
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onRefresh, modifier = Modifier.size(42.dp)) {
+                                Icon(Icons.Filled.Refresh, "Atualizar", tint = VpCyan)
+                            }
+                            IconButton(onClick = onSettings, modifier = Modifier.size(42.dp)) {
+                                Icon(Icons.Filled.Settings, "Ajustes", tint = Color.White)
+                            }
                         }
                     }
                 }
@@ -142,67 +153,242 @@ private fun MobileHome(
 
     LaunchedEffect(catalogVersion, adultUnlocked) {
         withContext(Dispatchers.IO) {
-            fun clean(list: List<CatalogItem>) = if (adultUnlocked) list else list.filterNot(::isAdultContent)
+            fun clean(list: List<CatalogItem>) =
+                if (adultUnlocked) list else list.filterNot(::isAdultContent)
+
             continueItems = clean(db.continueWatching(20))
             movies = clean(db.query(ContentType.MOVIE, limit = 24))
             series = clean(db.query(ContentType.SERIES, limit = 24))
         }
     }
 
+    val featured = remember(continueItems, movies) {
+        continueItems.firstOrNull() ?: movies.firstOrNull()
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
+        item {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .background(Color(0xFF06111F))
+            ) {
+                if (!featured?.image.isNullOrBlank()) {
+                    AsyncImage(
+                        model = featured?.image,
+                        contentDescription = featured?.name,
+                        contentScale = ContentScale.Crop,
+                        alpha = .48f,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = .10f),
+                                Color(0xFF02040B).copy(alpha = .45f),
+                                VpBg
+                            )
+                        )
+                    )
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFF02040B).copy(alpha = .94f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+                )
+
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 18.dp, vertical = 18.dp)
+                        .fillMaxWidth(.90f)
+                ) {
+                    Surface(
+                        color = VpCyan.copy(alpha = .14f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .38f)),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            if (featured != null) "DESTAQUE VPLAYO" else "VPLAYO PREMIUM",
+                            color = VpCyan,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        featured?.name ?: "Filmes, séries e TV ao vivo",
+                        color = Color.White,
+                        fontSize = 29.sp,
+                        lineHeight = 31.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (featured != null) "Continue de onde parou ou descubra algo novo."
+                        else "Sua programação em uma experiência mais rápida e elegante.",
+                        color = Color.White.copy(alpha = .72f),
+                        fontSize = 12.sp,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = {
+                                if (featured != null) onOpen(featured)
+                                else onSection(MainSection.MOVIES)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                        ) {
+                            Text(
+                                if (featured != null) "▶ Assistir" else "Explorar",
+                                color = Color(0xFF04101D),
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { onSection(MainSection.LIVE) },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .32f))
+                        ) {
+                            Text("TV ao vivo", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
         accessNotice?.let { notice ->
             item {
-                Surface(color = VpPurple.copy(alpha = 0.16f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(notice, color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onSupport) { Text("Renovar") }
+                Surface(
+                    color = VpPurple.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .28f)),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Aviso da sua assinatura", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(notice, color = VpMuted, fontSize = 11.sp)
+                        }
+                        TextButton(onClick = onSupport) { Text("Suporte") }
                     }
                 }
             }
         }
 
         item {
-            Text("O que você quer assistir?", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeQuick("TV ao vivo", Icons.Filled.LiveTv, Modifier.weight(1f)) { onSection(MainSection.LIVE) }
-                HomeQuick("Filmes", Icons.Filled.Movie, Modifier.weight(1f)) { onSection(MainSection.MOVIES) }
-                HomeQuick("Séries", Icons.Filled.VideoLibrary, Modifier.weight(1f)) { onSection(MainSection.SERIES) }
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text("Navegar", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeQuick("TV", "Ao vivo", Icons.Filled.LiveTv, Modifier.weight(1f), VpCyan) {
+                        onSection(MainSection.LIVE)
+                    }
+                    HomeQuick("Filmes", "Cinema", Icons.Filled.Movie, Modifier.weight(1f), VpPurple) {
+                        onSection(MainSection.MOVIES)
+                    }
+                    HomeQuick("Séries", "Episódios", Icons.Filled.VideoLibrary, Modifier.weight(1f), VpGreen) {
+                        onSection(MainSection.SERIES)
+                    }
+                }
             }
         }
 
         if (continueItems.isNotEmpty()) item {
-            ContentStrip("Continuar assistindo", continueItems, onOpen) {
-                db.toggleFavorite(it.itemKey); onChanged()
+            PremiumContentStrip("Continuar assistindo", "Retome rapidamente", continueItems, onOpen) {
+                db.toggleFavorite(it.itemKey)
+                onChanged()
             }
         }
         if (movies.isNotEmpty()) item {
-            ContentStrip("Filmes", movies, onOpen) { db.toggleFavorite(it.itemKey); onChanged() }
+            PremiumContentStrip("Filmes para você", "Explore o catálogo", movies, onOpen) {
+                db.toggleFavorite(it.itemKey)
+                onChanged()
+            }
         }
         if (series.isNotEmpty()) item {
-            ContentStrip("Séries", series, onOpen) { db.toggleFavorite(it.itemKey); onChanged() }
+            PremiumContentStrip("Séries em destaque", "Maratone seus episódios", series, onOpen) {
+                db.toggleFavorite(it.itemKey)
+                onChanged()
+            }
         }
-        item { OutlinedButton(onClick = onSupport, modifier = Modifier.fillMaxWidth()) { Text("Suporte VPlayo") } }
+
+        item {
+            OutlinedButton(
+                onClick = onSupport,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VpBorder)
+            ) {
+                Text("Suporte VPlayo")
+            }
+        }
     }
 }
 
 @Composable
-private fun HomeQuick(label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp), modifier = modifier) {
-        Box(
-            modifier = Modifier.fillMaxWidth().height(98.dp).background(
-                Brush.linearGradient(listOf(Color(0xFF0A3157), VpPanel, VpPurple.copy(alpha = 0.18f)))
-            )
+private fun HomeQuick(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    modifier: Modifier,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+    ) {
+        TextButton(
+            onClick = onClick,
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(112.dp)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            accent.copy(alpha = .24f),
+                            VpPanelAlt,
+                            VpPanel
+                        )
+                    )
+                )
         ) {
-            TextButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(icon, null, tint = VpCyan, modifier = Modifier.size(27.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Column(
+                Modifier.fillMaxSize().padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.Start
+            ) {
+                Surface(
+                    color = accent.copy(alpha = .18f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        icon,
+                        null,
+                        tint = accent,
+                        modifier = Modifier.padding(9.dp).size(22.dp)
+                    )
+                }
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                    Text(subtitle, color = VpMuted, fontSize = 10.sp)
                 }
             }
         }
@@ -210,13 +396,35 @@ private fun HomeQuick(label: String, icon: ImageVector, modifier: Modifier, onCl
 }
 
 @Composable
-private fun ContentStrip(title: String, items: List<CatalogItem>, onOpen: (CatalogItem) -> Unit, onFavorite: (CatalogItem) -> Unit) {
+private fun PremiumContentStrip(
+    title: String,
+    subtitle: String,
+    items: List<CatalogItem>,
+    onOpen: (CatalogItem) -> Unit,
+    onFavorite: (CatalogItem) -> Unit
+) {
     Column {
-        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column {
+                Text(title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black)
+                Text(subtitle, color = VpMuted, fontSize = 10.sp)
+            }
+        }
+        Spacer(Modifier.height(11.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             items(items, key = { it.itemKey }) { item ->
-                PosterCard(item, 132.dp, { onOpen(item) }, onFavorite = { onFavorite(item) })
+                PosterCard(
+                    item,
+                    138.dp,
+                    { onOpen(item) },
+                    onFavorite = { onFavorite(item) }
+                )
             }
         }
     }

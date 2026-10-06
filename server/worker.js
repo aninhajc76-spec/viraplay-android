@@ -57,7 +57,7 @@ export default {
 
     try {
       if (req.method === "GET" && url.pathname === "/") {
-        return json({ name: "VPlayo API", ok: true, version: "3.3.11" });
+        return json({ name: "VPlayo API", ok: true, version: "3.3.13" });
       }
 
       if (req.method === "POST" && url.pathname === "/api/register") {

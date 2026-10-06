@@ -62,7 +62,8 @@ private data class ScreenMode(
 private data class AudioTrackChoice(
     val group: Tracks.Group,
     val trackIndex: Int,
-    val label: String
+    val label: String,
+    val supported: Boolean
 )
 
 private val screenModes = listOf(
@@ -78,14 +79,16 @@ private fun audioChoices(tracks: Tracks): List<AudioTrackChoice> {
         .filter { it.type == C.TRACK_TYPE_AUDIO }
         .forEach { group ->
             for (i in 0 until group.length) {
-                if (!group.isTrackSupported(i)) continue
                 val format = group.getTrackFormat(i)
                 val language = format.language?.uppercase()?.takeIf { it.isNotBlank() }
-                val label = format.label?.takeIf { it.isNotBlank() }
+                val codec = format.sampleMimeType?.substringAfterLast('/')?.uppercase()
+                val base = format.label?.takeIf { it.isNotBlank() }
                     ?: language
-                    ?: format.sampleMimeType?.substringAfterLast('/')?.uppercase()
+                    ?: codec
                     ?: "Áudio ${result.size + 1}"
-                result += AudioTrackChoice(group, i, label)
+                val supported = group.isTrackSupported(i)
+                val label = if (supported) base else "$base • incompatível"
+                result += AudioTrackChoice(group, i, label, supported)
             }
         }
     return result
@@ -95,6 +98,16 @@ private fun selectedAudioLabel(tracks: Tracks): String {
     val choices = audioChoices(tracks)
     return choices.firstOrNull { it.group.isTrackSelected(it.trackIndex) }?.label ?: "AUTO"
 }
+
+private fun portugueseAudioChoice(tracks: Tracks): AudioTrackChoice? =
+    audioChoices(tracks).firstOrNull { choice ->
+        if (!choice.supported) return@firstOrNull false
+        val format = choice.group.getTrackFormat(choice.trackIndex)
+        val lang = format.language?.lowercase().orEmpty()
+        val label = format.label?.lowercase().orEmpty()
+        lang == "pt" || lang == "pt-br" || lang == "por" || lang.startsWith("pt-") ||
+            label.contains("portugu") || label.contains("brazil")
+    }
 
 private fun formatPlayerTime(ms: Long): String {
     if (ms <= 0L) return "00:00"
@@ -174,7 +187,9 @@ fun PlayerScreen(
         mutableStateOf(qualityLabel(item.name))
     }
     var audioTrackCount by remember(item.itemKey) { mutableIntStateOf(0) }
+    var audioSupportedCount by remember(item.itemKey) { mutableIntStateOf(0) }
     var audioLabelState by remember(item.itemKey) { mutableStateOf("AUTO") }
+    var portugueseApplied by remember(item.itemKey) { mutableStateOf(false) }
     var variants by remember(item.itemKey) {
         mutableStateOf(
             if (item.type == ContentType.LIVE) db.liveVariants(item)
@@ -224,7 +239,9 @@ fun PlayerScreen(
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
-                    audioTrackCount = audioChoices(tracks).size
+                    val choices = audioChoices(tracks)
+                    audioTrackCount = choices.size
+                    audioSupportedCount = choices.count { it.supported }
                     audioLabelState = selectedAudioLabel(tracks)
                 }
             })
@@ -263,6 +280,7 @@ fun PlayerScreen(
         currentItem = newItem
         currentUrl = newUrl
         qualityLabelState = qualityLabel(newItem.name)
+        portugueseApplied = false
         error = null
         retryCount = 0
 
@@ -346,9 +364,15 @@ fun PlayerScreen(
     }
 
     fun cycleAudio() {
-        val choices = audioChoices(player.currentTracks)
+        val allChoices = audioChoices(player.currentTracks)
+        val choices = allChoices.filter { it.supported }
+
+        if (allChoices.isEmpty()) {
+            audioLabelState = "Nenhuma faixa detectada"
+            return
+        }
         if (choices.isEmpty()) {
-            audioLabelState = "Sem faixa compatível"
+            audioLabelState = "Áudio incompatível"
             return
         }
 
@@ -361,7 +385,7 @@ fun PlayerScreen(
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                 .setPreferredAudioLanguage("pt")
                 .build()
-            audioLabelState = "AUTO"
+            audioLabelState = "AUTO / PT"
         } else {
             val choice = choices[nextIndex]
             player.trackSelectionParameters = player.trackSelectionParameters
@@ -449,6 +473,22 @@ fun PlayerScreen(
             controlsVisible = false
         } else if (isTv) {
             runCatching { videoFocus.requestFocus() }
+        }
+    }
+
+    LaunchedEffect(currentItem.itemKey, audioTrackCount) {
+        if (!portugueseApplied && audioTrackCount > 0) {
+            portugueseAudioChoice(player.currentTracks)?.let { choice ->
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .setOverrideForType(
+                        TrackSelectionOverride(choice.group.mediaTrackGroup, choice.trackIndex)
+                    )
+                    .build()
+                player.volume = 1f
+                audioLabelState = choice.label
+                portugueseApplied = true
+            }
         }
     }
 
@@ -667,12 +707,13 @@ fun PlayerScreen(
                                     applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
                                     controlsVisible = true
                                 })
-                                if (audioTrackCount > 1) {
-                                    TvPlayerControl("Áudio: $audioLabelState", {
+                                TvPlayerControl(
+                                    "Áudio: ${if (audioTrackCount == 0) "detectar" else audioLabelState}",
+                                    {
                                         cycleAudio()
                                         controlsVisible = true
-                                    })
-                                }
+                                    }
+                                )
                                 if (currentItem.type == ContentType.LIVE) {
                                     TvPlayerControl(
                                         if (autoQuality) "Qualidade: AUTO" else "Qualidade: $qualityLabelState",
@@ -713,12 +754,15 @@ fun PlayerScreen(
                                     },
                                     label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
                                 )
-                                if (audioTrackCount > 1) {
-                                    AssistChip(
-                                        onClick = { cycleAudio(); controlsVisible = true },
-                                        label = { Text("Áudio: $audioLabelState", fontSize = 11.sp) }
-                                    )
-                                }
+                                AssistChip(
+                                    onClick = { cycleAudio(); controlsVisible = true },
+                                    label = {
+                                        Text(
+                                            "Áudio: ${if (audioTrackCount == 0) "detectar" else audioLabelState}",
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                )
                                 if (currentItem.type == ContentType.LIVE) {
                                     AssistChip(
                                         onClick = { changeLive(false); controlsVisible = true },

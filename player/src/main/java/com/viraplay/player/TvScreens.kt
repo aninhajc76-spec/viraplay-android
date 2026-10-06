@@ -23,11 +23,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.viraplay.shared.ContentType
+import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -165,100 +167,250 @@ private fun TvHome(
     )
 
     var counts by remember { mutableStateOf(readCounts()) }
+    var featured by remember { mutableStateOf<CatalogItem?>(null) }
     val firstFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         delay(120)
         runCatching { firstFocus.requestFocus() }
     }
+
     LaunchedEffect(version) {
-        counts = withContext(Dispatchers.IO) { readCounts() }
+        withContext(Dispatchers.IO) {
+            counts = readCounts()
+            featured = db.continueWatching(10).firstOrNull()
+                ?: db.query(ContentType.MOVIE, limit = 12).firstOrNull()
+        }
     }
 
     Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF020713), Color(0xFF061426), Color(0xFF020713))
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF02050C))
+    ) {
+        if (!featured?.image.isNullOrBlank()) {
+            AsyncImage(
+                model = featured?.image,
+                contentDescription = featured?.name,
+                contentScale = ContentScale.Crop,
+                alpha = .24f,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF02050C),
+                        Color(0xFF02050C).copy(alpha = .88f),
+                        Color(0xFF02050C).copy(alpha = .55f)
+                    )
+                )
             )
         )
-    ) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.Transparent,
+                        Color(0xFF02050C).copy(alpha = .30f),
+                        Color(0xFF02050C)
+                    )
+                )
+            )
+        )
+
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 18.dp)
+            Modifier.fillMaxSize().padding(horizontal = 34.dp, vertical = 16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BrandWordmark(large = true)
-                Spacer(Modifier.width(18.dp))
+                Spacer(Modifier.width(16.dp))
                 Surface(
-                    color = VpCyan.copy(alpha = 0.12f),
+                    color = Color.White.copy(alpha = .06f),
                     shape = RoundedCornerShape(50),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = 0.28f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .10f))
                 ) {
-                    Text(
-                        "TV EXPERIENCE",
-                        color = VpCyan,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-                    )
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(7.dp).background(VpGreen, RoundedCornerShape(50)))
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            "TV EXPERIENCE",
+                            color = Color.White.copy(alpha = .88f),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("VPlayo ${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text(status, color = VpMuted, fontSize = 10.sp, maxLines = 1)
+                    Text(
+                        "VPlayo ${BuildConfig.VERSION_NAME}",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(status, color = VpMuted, fontSize = 9.sp, maxLines = 1)
                 }
             }
 
             accessNotice?.let {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Surface(
-                    color = Color(0xFF25173E),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .45f))
+                    color = VpPurple.copy(alpha = .12f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .30f))
                 ) {
-                    Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 11.sp)
+                    Text(
+                        it,
+                        color = Color.White.copy(alpha = .92f),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        fontSize = 10.sp
+                    )
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(
                 Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 FocusTile(
-                    onClick = { onSection(MainSection.LIVE) },
-                    modifier = Modifier.weight(1.42f).fillMaxHeight().focusRequester(firstFocus)
+                    onClick = {
+                        featured?.let { item ->
+                            when (item.type) {
+                                ContentType.LIVE -> onSection(MainSection.LIVE)
+                                ContentType.SERIES, ContentType.EPISODE -> onSection(MainSection.SERIES)
+                                else -> onSection(MainSection.MOVIES)
+                            }
+                        } ?: onSection(MainSection.MOVIES)
+                    },
+                    modifier = Modifier
+                        .weight(1.48f)
+                        .fillMaxHeight()
+                        .focusRequester(firstFocus)
                 ) {
                     Box(
-                        Modifier.fillMaxSize().background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFF063D61), Color(0xFF082443), Color(0xFF1A1133))
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFF07192B),
+                                        Color(0xFF0A1730),
+                                        Color(0xFF160D2E)
+                                    )
+                                )
                             )
-                        )
                     ) {
+                        if (!featured?.image.isNullOrBlank()) {
+                            AsyncImage(
+                                model = featured?.image,
+                                contentDescription = featured?.name,
+                                contentScale = ContentScale.Crop,
+                                alpha = .42f,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
                         Box(
-                            Modifier.align(Alignment.TopEnd).fillMaxHeight().width(150.dp).background(
-                                Brush.horizontalGradient(listOf(Color.Transparent, VpPurple.copy(alpha = .16f)))
+                            Modifier.fillMaxSize().background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0xFF04101F).copy(alpha = .98f),
+                                        Color(0xFF04101F).copy(alpha = .72f),
+                                        Color.Transparent
+                                    )
+                                )
                             )
                         )
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = .62f))
+                                )
+                            )
+                        )
+
                         Column(
-                            Modifier.fillMaxSize().padding(28.dp),
+                            Modifier.fillMaxSize().padding(30.dp),
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(color = VpCyan, shape = RoundedCornerShape(50)) {
-                                    Text("●  AO VIVO", color = Color(0xFF00131D), fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                                Surface(
+                                    color = VpCyan.copy(alpha = .14f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .36f)),
+                                    shape = RoundedCornerShape(50)
+                                ) {
+                                    Text(
+                                        "DESTAQUE",
+                                        color = VpCyan,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                                    )
                                 }
-                                Spacer(Modifier.width(10.dp))
-                                Text("${counts.live} canais", color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
+                                Spacer(Modifier.width(9.dp))
+                                Text(
+                                    if (featured?.progressFraction ?: 0f > 0f) "CONTINUAR ASSISTINDO"
+                                    else "ESCOLHIDO PARA VOCÊ",
+                                    color = Color.White.copy(alpha = .68f),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                            Column {
-                                Text("Assista agora", color = VpCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text("TV ao vivo", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Black)
-                                Text("Entre direto nos seus canais com prévia, favoritos e troca rápida.", color = Color.White.copy(alpha = .70f), fontSize = 12.sp, modifier = Modifier.widthIn(max = 390.dp))
+
+                            Column(Modifier.widthIn(max = 520.dp)) {
+                                Text(
+                                    featured?.name ?: "Uma experiência de streaming mais premium",
+                                    color = Color.White,
+                                    fontSize = 36.sp,
+                                    lineHeight = 39.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 2
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Filmes, séries e TV ao vivo em um visual mais limpo, rápido e pensado para o controle remoto.",
+                                    color = Color.White.copy(alpha = .72f),
+                                    fontSize = 11.sp,
+                                    maxLines = 2
+                                )
                                 Spacer(Modifier.height(16.dp))
-                                Surface(color = Color.White, shape = RoundedCornerShape(50)) {
-                                    Text("ABRIR TV", color = Color(0xFF03111F), fontWeight = FontWeight.Black, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Surface(
+                                        color = Color.White,
+                                        shape = RoundedCornerShape(50)
+                                    ) {
+                                        Text(
+                                            if (featured != null) "▶  ABRIR DESTAQUE" else "EXPLORAR FILMES",
+                                            color = Color(0xFF03101D),
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                                        )
+                                    }
+                                    Surface(
+                                        color = Color.White.copy(alpha = .08f),
+                                        shape = RoundedCornerShape(50),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            Color.White.copy(alpha = .16f)
+                                        )
+                                    ) {
+                                        Text(
+                                            "${counts.movies + counts.series} títulos",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -267,32 +419,101 @@ private fun TvHome(
 
                 Column(
                     Modifier.weight(1f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        PremiumHomeCard("FILMES", "${counts.movies}", "títulos", Modifier.weight(1f), VpCyan) { onSection(MainSection.MOVIES) }
-                        PremiumHomeCard("SÉRIES", "${counts.series}", "títulos", Modifier.weight(1f), VpPurple) { onSection(MainSection.SERIES) }
+                    Row(
+                        Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PremiumHomeCard(
+                            "TV AO VIVO",
+                            counts.live.toString(),
+                            "canais",
+                            Modifier.weight(1f),
+                            VpCyan
+                        ) { onSection(MainSection.LIVE) }
+
+                        PremiumHomeCard(
+                            "FILMES",
+                            counts.movies.toString(),
+                            "títulos",
+                            Modifier.weight(1f),
+                            VpPurple
+                        ) { onSection(MainSection.MOVIES) }
                     }
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        PremiumHomeCard("CONTINUAR", counts.continueWatching.toString(), "em andamento", Modifier.weight(1f), VpGreen) { onContinue() }
-                        PremiumHomeCard("FAVORITOS", "★", "sua seleção", Modifier.weight(1f), Color(0xFFFFC857)) { onSection(MainSection.FAVORITES) }
+
+                    Row(
+                        Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PremiumHomeCard(
+                            "SÉRIES",
+                            counts.series.toString(),
+                            "títulos",
+                            Modifier.weight(1f),
+                            VpGreen
+                        ) { onSection(MainSection.SERIES) }
+
+                        PremiumHomeCard(
+                            "CONTINUAR",
+                            counts.continueWatching.toString(),
+                            "em andamento",
+                            Modifier.weight(1f),
+                            VpGold
+                        ) { onContinue() }
                     }
-                    Row(Modifier.height(82.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        PremiumActionCard("SUPORTE", "WhatsApp e QR Code", Modifier.weight(1f), onSupport)
-                        PremiumActionCard("CONFIGURAÇÕES", "Qualidade, PIN e aparelho", Modifier.weight(1f), onSettings)
+
+                    Row(
+                        Modifier.height(82.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PremiumActionCard(
+                            "FAVORITOS",
+                            "Sua seleção",
+                            Modifier.weight(1f)
+                        ) { onSection(MainSection.FAVORITES) }
+
+                        PremiumActionCard(
+                            "CONFIGURAÇÕES",
+                            "Qualidade, PIN e aparelho",
+                            Modifier.weight(1f),
+                            onSettings
+                        )
+                    }
+
+                    Row(
+                        Modifier.height(70.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PremiumActionCard(
+                            "SUPORTE",
+                            "WhatsApp e QR Code",
+                            Modifier.weight(1f),
+                            onSupport
+                        )
+                        PremiumActionCard(
+                            "VPLAYO",
+                            "Streaming otimizado",
+                            Modifier.weight(1f)
+                        ) { }
                     }
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(9.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("VPlayo", color = VpCyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
-                Spacer(Modifier.width(10.dp))
+                Text(
+                    "VPlayo",
+                    color = VpCyan,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp
+                )
+                Spacer(Modifier.width(9.dp))
                 Box(Modifier.width(4.dp).height(4.dp).background(VpMuted, RoundedCornerShape(50)))
-                Spacer(Modifier.width(10.dp))
-                Text("Filmes • Séries • TV ao vivo", color = VpMuted, fontSize = 10.sp)
+                Spacer(Modifier.width(9.dp))
+                Text("Filmes • Séries • TV ao vivo", color = VpMuted, fontSize = 9.sp)
                 Spacer(Modifier.weight(1f))
-                Text("Controle remoto otimizado", color = VpMuted, fontSize = 10.sp)
+                Text("Controle remoto otimizado", color = VpMuted, fontSize = 9.sp)
             }
         }
     }
@@ -309,16 +530,44 @@ private fun PremiumHomeCard(
 ) {
     FocusTile(onClick = onClick, modifier = modifier.fillMaxHeight()) {
         Box(
-            Modifier.fillMaxSize().background(
-                Brush.linearGradient(listOf(Color(0xFF081B31), Color(0xFF061426)))
-            ).padding(18.dp)
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            accent.copy(alpha = .16f),
+                            Color(0xFF0A1728),
+                            Color(0xFF07111F)
+                        )
+                    )
+                )
+                .padding(17.dp)
         ) {
-            Box(Modifier.align(Alignment.TopEnd).size(42.dp).background(accent.copy(alpha = .11f), RoundedCornerShape(14.dp)))
+            Surface(
+                color = accent.copy(alpha = .13f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Box(Modifier.size(42.dp))
+            }
+
             Column(Modifier.align(Alignment.BottomStart)) {
-                Text(title, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                Spacer(Modifier.height(4.dp))
-                Text(value, color = Color.White, fontSize = if (value.length > 4) 23.sp else 30.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                Text(subtitle, color = VpMuted, fontSize = 10.sp)
+                Text(
+                    title,
+                    color = accent,
+                    fontSize = 9.sp,
+                    letterSpacing = .6.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    value,
+                    color = Color.White,
+                    fontSize = if (value.length > 4) 22.sp else 29.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1
+                )
+                Text(subtitle, color = VpMuted, fontSize = 9.sp)
             }
         }
     }
@@ -333,14 +582,29 @@ private fun PremiumActionCard(
 ) {
     FocusTile(onClick = onClick, modifier = modifier.fillMaxHeight()) {
         Row(
-            Modifier.fillMaxSize().background(Color(0xFF07182C)).padding(horizontal = 16.dp),
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF0A182A), Color(0xFF07111F))
+                    )
+                )
+                .padding(horizontal = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.width(3.dp).height(34.dp).background(VpCyan, RoundedCornerShape(50)))
-            Spacer(Modifier.width(12.dp))
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height(32.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(VpCyan, VpPurple)),
+                        RoundedCornerShape(50)
+                    )
+            )
+            Spacer(Modifier.width(11.dp))
             Column {
-                Text(title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                Text(subtitle, color = VpMuted, fontSize = 9.sp, maxLines = 1)
+                Text(title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 10.sp)
+                Text(subtitle, color = VpMuted, fontSize = 8.sp, maxLines = 1)
             }
         }
     }

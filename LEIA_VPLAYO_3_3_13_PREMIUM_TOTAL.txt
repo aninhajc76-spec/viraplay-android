@@ -1,0 +1,23 @@
+VPlayo 3.3.13 / versionCode 46
+
+PACOTE COMPLETO
+- redesign premium do aplicativo cliente no CELULAR
+- redesign premium da HOME da ANDROID TV
+- hero/banner dinâmico usando arte do catálogo
+- navegação mais limpa e menos técnica
+- cards com profundidade, foco refinado e identidade VPlayo
+- posters com acabamento novo e barra de progresso em gradiente
+- mantém Favoritos, Continuar, TV ao vivo, Filmes, Séries, Suporte e Configurações
+- mantém todas as correções de parceiros da 3.3.11
+- mantém correções e seletor de áudio da 3.3.12
+- Português/PT-BR continua prioritário
+- seletor de áudio continua sempre visível
+- keep_vars=true no Wrangler para preservar variáveis/segredos do Cloudflare em futuras publicações
+
+ASAAS
+- estrutura continua preparada
+- a conta Asaas já pode ser integrada depois com API key/webhook sem refazer o app visual
+
+IMPORTANTE
+Se a série específica continuar com faixa marcada como incompatível, isso confirma a necessidade
+de um decoder FFmpeg nativo adicional. Esta versão mantém o diagnóstico visível no seletor de áudio.

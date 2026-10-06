@@ -1,0 +1,15 @@
+VPlayo 3.3.12 / versionCode 45
+
+PLAYER / AUDIO
+- botão Áudio sempre visível no celular e na TV
+- lista todas as faixas detectadas
+- identifica faixa incompatível em vez de esconder o seletor
+- preferência automática por Português / PT-BR / POR quando a fonte informa o idioma
+- seleção manual continua disponível
+- removida a limitação que podia rejeitar áudio multicanal em alguns aparelhos
+- volume reforçado ao trocar faixa
+
+IMPORTANTE
+Esta versão melhora seleção e compatibilidade usando os decodificadores do Android/Media3.
+Se a série específica continuar muda e a faixa aparecer como "incompatível", o próximo passo será
+integrar um decodificador FFmpeg nativo específico.

@@ -1,6 +1,6 @@
 {
   "name": "vplayo-api",
-  "version": "3.3.11",
+  "version": "3.3.13",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy"

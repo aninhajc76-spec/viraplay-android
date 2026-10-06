@@ -3,16 +3,17 @@ package com.viraplay.player
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 
-val VpBg = Color(0xFF010611)
-val VpPanel = Color(0xFF07172F)
-val VpPanelAlt = Color(0xFF0D2850)
-val VpCyan = Color(0xFF13D2FF)
-val VpPurple = Color(0xFF9B42FF)
-val VpGreen = Color(0xFF48DF91)
-val VpDanger = Color(0xFFFF617C)
-val VpMuted = Color(0xFF9AA8C0)
-val VpBorder = Color(0xFF334D72)
-val VpSoft = Color(0xFF12203A)
+val VpBg = Color(0xFF02040B)
+val VpPanel = Color(0xFF08111F)
+val VpPanelAlt = Color(0xFF0D1C31)
+val VpCyan = Color(0xFF17D4FF)
+val VpPurple = Color(0xFF8E48FF)
+val VpGreen = Color(0xFF42E79A)
+val VpDanger = Color(0xFFFF607C)
+val VpMuted = Color(0xFF9BA8BD)
+val VpBorder = Color(0xFF213958)
+val VpSoft = Color(0xFF101A2A)
+val VpGold = Color(0xFFFFD166)
 
 val VPlayoColors = darkColorScheme(
     primary = VpCyan,

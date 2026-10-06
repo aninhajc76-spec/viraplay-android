@@ -83,17 +83,20 @@ fun FocusTile(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.045f else 1f,
-        animationSpec = tween(110),
+        targetValue = if (focused) 1.025f else 1f,
+        animationSpec = tween(120),
         label = "vp_focus_scale"
     )
 
     Surface(
-        color = if (focused) Color(0xFF0D3359) else Color(0xFF071A34),
-        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) VpCyan else VpBorder.copy(alpha = 0.75f)),
-        shape = RoundedCornerShape(20.dp),
-        tonalElevation = if (focused) 8.dp else 2.dp,
-        shadowElevation = if (focused) 10.dp else 1.dp,
+        color = if (focused) Color(0xFF102B4A) else Color(0xFF081628),
+        border = BorderStroke(
+            if (focused) 2.dp else 1.dp,
+            if (focused) VpCyan else VpBorder.copy(alpha = 0.72f)
+        ),
+        shape = RoundedCornerShape(22.dp),
+        tonalElevation = if (focused) 8.dp else 1.dp,
+        shadowElevation = if (focused) 16.dp else 3.dp,
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
@@ -119,8 +122,8 @@ fun PosterCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.05f else 1f,
-        animationSpec = tween(100),
+        targetValue = if (focused) 1.035f else 1f,
+        animationSpec = tween(110),
         label = "poster_focus_scale"
     )
 
@@ -137,82 +140,107 @@ fun PosterCard(
             }
             .clickable(onClick = onClick)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.68f)
-                .clip(RoundedCornerShape(14.dp))
-                .border(
-                    width = if (focused) 4.dp else 1.dp,
-                    color = if (focused) Color.White else VpBorder,
-                    shape = RoundedCornerShape(14.dp)
-                )
-                .background(VpPanel)
+        Surface(
+            color = VpPanel,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(
+                if (focused) 2.dp else 1.dp,
+                if (focused) VpCyan else VpBorder.copy(alpha = .78f)
+            ),
+            shadowElevation = if (focused) 16.dp else 5.dp
         ) {
-            AsyncImage(
-                model = item.image,
-                contentDescription = item.name,
-                placeholder = painterResource(R.drawable.viraplay_logo),
-                error = painterResource(R.drawable.viraplay_logo),
-                fallback = painterResource(R.drawable.viraplay_logo),
-                contentScale = if (item.image.isNullOrBlank()) ContentScale.Fit else ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().padding(if (item.image.isNullOrBlank()) 22.dp else 0.dp)
-            )
-
-            if (item.favorite || onFavorite != null) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.74f),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .then(
-                            if (onFavorite != null) {
-                                Modifier.pointerInput(item.itemKey, item.favorite) {
-                                    detectTapGestures(onTap = { onFavorite() })
-                                }
-                            } else Modifier
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.68f)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0xFF12243B), Color(0xFF08111F))
                         )
-                ) {
-                    Text(
-                        if (item.favorite) "FAV" else "+FAV",
-                        color = if (item.favorite) VpCyan else Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                     )
-                }
-            }
-
-            if (item.progressFraction > 0f) {
-                Box(
+            ) {
+                AsyncImage(
+                    model = item.image,
+                    contentDescription = item.name,
+                    placeholder = painterResource(R.drawable.viraplay_logo),
+                    error = painterResource(R.drawable.viraplay_logo),
+                    fallback = painterResource(R.drawable.viraplay_logo),
+                    contentScale = if (item.image.isNullOrBlank()) ContentScale.Fit else ContentScale.Crop,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .fillMaxSize()
+                        .padding(if (item.image.isNullOrBlank()) 22.dp else 0.dp)
+                )
+
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(5.dp)
-                        .background(Color.Black.copy(alpha = 0.55f))
-                ) {
+                        .height(44.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = .82f))
+                            )
+                        )
+                )
+
+                if (item.favorite || onFavorite != null) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = .12f)),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(7.dp)
+                            .then(
+                                if (onFavorite != null) {
+                                    Modifier.pointerInput(item.itemKey, item.favorite) {
+                                        detectTapGestures(onTap = { onFavorite() })
+                                    }
+                                } else Modifier
+                            )
+                    ) {
+                        Text(
+                            if (item.favorite) "♥" else "+",
+                            color = if (item.favorite) VpCyan else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+
+                if (item.progressFraction > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(item.progressFraction)
-                            .background(VpCyan)
-                    )
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(item.progressFraction)
+                                .background(
+                                    Brush.horizontalGradient(listOf(VpCyan, VpPurple))
+                                )
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             item.name,
             color = Color.White,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         item.rating?.takeIf { it.isNotBlank() }?.let {
-            Text("Nota $it", color = VpMuted, fontSize = 10.sp)
+            Text("★ $it", color = VpGold, fontSize = 10.sp)
         }
     }
 }
