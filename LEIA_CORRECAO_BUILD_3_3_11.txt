@@ -1,0 +1,6 @@
+VPlayo 3.3.11 FIX
+
+Correção do erro de compilação no ADM:
+- função de copiar login/chave deixou de ser marcada incorretamente como @Composable.
+
+Mantém todas as funções da 3.3.11.

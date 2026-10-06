@@ -521,7 +521,6 @@ private fun StatusPill(enabled: Boolean) {
     }
 }
 
-@Composable
 private fun copyPartnerText(context: Context, label: String, value: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
