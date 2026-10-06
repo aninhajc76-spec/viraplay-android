@@ -57,7 +57,7 @@ export default {
 
     try {
       if (req.method === "GET" && url.pathname === "/") {
-        return json({ name: "VPlayo API", ok: true, version: "3.3.10" });
+        return json({ name: "VPlayo API", ok: true, version: "3.3.11" });
       }
 
       if (req.method === "POST" && url.pathname === "/api/register") {
@@ -225,6 +225,64 @@ export default {
           body: JSON.stringify({ name, login_code: loginCode, access_token: accessToken, status: "ACTIVE", credits: 0 })
         });
         return json({ ok: true, partner: { ...(rows?.[0] || {}), clients: 0 } });
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/admin/partners/update") {
+        if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);
+        const b = await req.json();
+        const partnerId = String(b.partner_id || "").trim();
+        const name = String(b.name || "").trim();
+        const status = String(b.status || "ACTIVE").toUpperCase();
+        if (!partnerId || !name) return json({ error: "missing_fields" }, 400);
+        if (!["ACTIVE", "BLOCKED"].includes(status)) return json({ error: "invalid_status" }, 400);
+
+        const rows = await sb(
+          env,
+          `viraplay_partners?id=eq.${encodeURIComponent(partnerId)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              name,
+              status,
+              updated_at: new Date().toISOString()
+            })
+          }
+        );
+        if (!rows?.length) return json({ error: "partner_not_found" }, 404);
+        return json({ ok: true, partner: rows[0] });
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/admin/partners/delete") {
+        if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);
+        const b = await req.json();
+        const partnerId = String(b.partner_id || "").trim();
+        if (!partnerId) return json({ error: "missing_partner_id" }, 400);
+
+        // Encerra primeiro os clientes do parceiro e devolve-os ao MASTER bloqueados.
+        await sb(
+          env,
+          `viraplay_devices?partner_id=eq.${encodeURIComponent(partnerId)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              partner_id: null,
+              enabled: false,
+              playlist_url: null,
+              license_activated_at: null,
+              license_expires_at: null,
+              license_credits_cost: 0,
+              updated_at: new Date().toISOString()
+            })
+          }
+        );
+
+        const removed = await sb(
+          env,
+          `viraplay_partners?id=eq.${encodeURIComponent(partnerId)}`,
+          { method: "DELETE" }
+        );
+        if (!removed?.length) return json({ error: "partner_not_found" }, 404);
+        return json({ ok: true, deleted: true });
       }
 
       if (req.method === "POST" && url.pathname === "/api/admin/partners/credits") {

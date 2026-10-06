@@ -1,0 +1,17 @@
+VPlayo 3.3.11 / versionCode 44
+
+GERENCIAMENTO DE PARCEIROS
+- botão Copiar no Login
+- botão Copiar na Chave ADM
+- Editar nome do parceiro
+- Bloquear/Reativar acesso do parceiro
+- Excluir parceria com confirmação
+- ao excluir: clientes do parceiro são bloqueados e voltam ao MASTER sem lista
+- créditos e histórico do parceiro excluído são removidos pelo banco
+- MASTER continua sem créditos
+- demais funções da 3.3.10 mantidas
+
+DEPOIS DE IMPORTAR:
+1. Build ViraPlay APKs
+2. Publicar Worker VPlayo
+3. instalar admin-release.apk

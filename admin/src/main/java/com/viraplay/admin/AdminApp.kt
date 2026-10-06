@@ -1,6 +1,9 @@
 package com.viraplay.admin
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -132,6 +135,8 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     var selectedClient by remember { mutableStateOf<AdminDevice?>(null) }
     var newPartnerDialog by remember { mutableStateOf(false) }
     var grantPartner by remember { mutableStateOf<PartnerInfo?>(null) }
+    var editPartner by remember { mutableStateOf<PartnerInfo?>(null) }
+    var deletePartner by remember { mutableStateOf<PartnerInfo?>(null) }
     var partnerBackendReady by remember { mutableStateOf(true) }
 
     var updateInfo by remember { mutableStateOf<AdminUpdateInfo?>(null) }
@@ -238,7 +243,9 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     partners = partners,
                     backendReady = partnerBackendReady,
                     onNew = { newPartnerDialog = true },
-                    onGrant = { grantPartner = it }
+                    onGrant = { grantPartner = it },
+                    onEdit = { editPartner = it },
+                    onDelete = { deletePartner = it }
                 )
                 Tab.CREDITS -> CreditsTab(currentProfile, credits)
                 Tab.UPDATES -> UpdatesTab(
@@ -297,6 +304,32 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
             grantPartner = null
             reload()
         })
+    }
+
+    editPartner?.let { partner ->
+        EditPartnerDialog(
+            partner = partner,
+            token = token,
+            repo = repo,
+            onDismiss = { editPartner = null },
+            onSaved = {
+                editPartner = null
+                reload()
+            }
+        )
+    }
+
+    deletePartner?.let { partner ->
+        DeletePartnerDialog(
+            partner = partner,
+            token = token,
+            repo = repo,
+            onDismiss = { deletePartner = null },
+            onDeleted = {
+                deletePartner = null
+                reload()
+            }
+        )
     }
 }
 
@@ -489,16 +522,27 @@ private fun StatusPill(enabled: Boolean) {
 }
 
 @Composable
+private fun copyPartnerText(context: Context, label: String, value: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+    Toast.makeText(context, "$label copiado", Toast.LENGTH_SHORT).show()
+}
+
+@Composable
 private fun PartnersTab(
     partners: List<PartnerInfo>,
     backendReady: Boolean,
     onNew: () -> Unit,
-    onGrant: (PartnerInfo) -> Unit
+    onGrant: (PartnerInfo) -> Unit,
+    onEdit: (PartnerInfo) -> Unit,
+    onDelete: (PartnerInfo) -> Unit
 ) {
+    val context = LocalContext.current
+
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text("Parceiros", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("Área exclusiva do MASTER. Cada parceiro enxerga somente os próprios clientes.", color = Muted, fontSize = 12.sp)
+            Text("Área exclusiva do MASTER. Copie o acesso, edite, bloqueie ou encerre uma parceria por aqui.", color = Muted, fontSize = 12.sp)
 
             if (!backendReady) {
                 Card(
@@ -509,7 +553,7 @@ private fun PartnersTab(
                     Column(Modifier.padding(14.dp)) {
                         Text("Configuração de parceiros pendente", color = Cyan, fontWeight = FontWeight.Bold)
                         Text(
-                            "O painel MASTER já está correto. Falta apenas ativar a estrutura de parceiros no Worker e no Supabase para liberar novos cadastros.",
+                            "Publique o Worker atualizado para liberar o gerenciamento de parceiros.",
                             color = Muted,
                             fontSize = 11.sp
                         )
@@ -523,23 +567,203 @@ private fun PartnersTab(
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
             ) { Text("Cadastrar parceiro") }
         }
+
         if (partners.isEmpty()) item { EmptyCard("Nenhum parceiro cadastrado.") }
+
         items(partners, key = { it.id }) { p ->
-            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Panel),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(Modifier.padding(15.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text("Login: ${p.loginCode} • ${p.clients} cliente(s)", color = Muted, fontSize = 10.sp)
+                            Text(
+                                "${if (p.status.equals("ACTIVE", true)) "ATIVO" else "BLOQUEADO"} • ${p.clients} cliente(s)",
+                                color = if (p.status.equals("ACTIVE", true)) Green else Danger,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                         Text("${p.credits} CR", color = Cyan, fontWeight = FontWeight.Black)
                     }
-                    Text("Chave ADM: ${p.accessToken}", color = Purple, fontSize = 10.sp, maxLines = 2)
-                    OutlinedButton(onClick = { onGrant(p) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Adicionar créditos") }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text("Login", color = Muted, fontSize = 9.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p.loginCode, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { copyPartnerText(context, "Login", p.loginCode) }) {
+                            Text("Copiar")
+                        }
+                    }
+
+                    Text("Chave ADM", color = Muted, fontSize = 9.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            p.accessToken,
+                            color = Purple,
+                            fontSize = 10.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { copyPartnerText(context, "Chave ADM", p.accessToken) }) {
+                            Text("Copiar")
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(onClick = { onEdit(p) }, modifier = Modifier.weight(1f)) {
+                            Text("Editar")
+                        }
+                        OutlinedButton(onClick = { onGrant(p) }, modifier = Modifier.weight(1f)) {
+                            Text("Créditos")
+                        }
+                    }
+
+                    TextButton(
+                        onClick = { onDelete(p) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Encerrar e excluir parceria", color = Danger)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun EditPartnerDialog(
+    partner: PartnerInfo,
+    token: String,
+    repo: AdminRepository,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var name by remember(partner.id) { mutableStateOf(partner.name) }
+    var active by remember(partner.id) { mutableStateOf(partner.status.equals("ACTIVE", true)) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Editar parceiro") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome do parceiro") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = active, onCheckedChange = { active = it })
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(if (active) "Parceiro ativo" else "Parceiro bloqueado", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (active) "Pode entrar no VPlayo ADM."
+                            else "O acesso do parceiro fica bloqueado.",
+                            color = Muted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !busy && name.isNotBlank(),
+                onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                repo.updatePartner(
+                                    token,
+                                    partner.id,
+                                    name.trim(),
+                                    if (active) "ACTIVE" else "BLOCKED"
+                                )
+                            }
+                            onSaved()
+                        } catch (e: Throwable) {
+                            error = e.message ?: "Falha ao salvar parceiro."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            ) { Text(if (busy) "Salvando..." else "Salvar") }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+@Composable
+private fun DeletePartnerDialog(
+    partner: PartnerInfo,
+    token: String,
+    repo: AdminRepository,
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Excluir parceria?") },
+        text = {
+            Column {
+                Text("Parceiro: ${partner.name}")
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Esta ação é definitiva. O acesso ADM do parceiro será apagado. Os clientes vinculados serão bloqueados e devolvidos ao painel MASTER para você decidir o que fazer com eles.",
+                    color = Muted,
+                    fontSize = 12.sp
+                )
+                error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !busy,
+                colors = ButtonDefaults.buttonColors(containerColor = Danger),
+                onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { repo.deletePartner(token, partner.id) }
+                            onDeleted()
+                        } catch (e: Throwable) {
+                            error = e.message ?: "Falha ao excluir parceiro."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            ) { Text(if (busy) "Excluindo..." else "Excluir definitivamente") }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }
 
 @Composable

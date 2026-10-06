@@ -181,6 +181,25 @@ class AdminRepository {
         )
     }
 
+    fun updatePartner(token: String, partnerId: String, name: String, status: String) {
+        Http.postJson(
+            "${AppConfig.SERVER_BASE_URL}/api/admin/partners/update",
+            JSONObject()
+                .put("partner_id", partnerId)
+                .put("name", name.trim())
+                .put("status", status),
+            auth(token)
+        )
+    }
+
+    fun deletePartner(token: String, partnerId: String) {
+        Http.postJson(
+            "${AppConfig.SERVER_BASE_URL}/api/admin/partners/delete",
+            JSONObject().put("partner_id", partnerId),
+            auth(token)
+        )
+    }
+
     fun grantCredits(token: String, partnerId: String, amount: Int, note: String? = null) {
         Http.postJson(
             "${AppConfig.SERVER_BASE_URL}/api/admin/partners/credits",
