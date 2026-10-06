@@ -1,14 +1,14 @@
 {
-  "versionCode": 46,
-  "versionName": "3.3.13",
+  "versionCode": 47,
+  "versionName": "3.3.14",
   "mandatory": true,
-  "message": "Novo visual premium, melhorias no áudio e gerenciamento de parceiros.",
-  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.13/ViraPlay-3.3.13.apk",
-  "sha256": "6a3fc9fa2ab571c06520f5deeaff0d960cf8e4d19f25af79be0be730de005bb2",
-  "adminVersionCode": 46,
-  "adminVersionName": "3.3.13",
+  "message": "Nova atualização ViraPlay disponível.",
+  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.14/ViraPlay-3.3.14.apk",
+  "sha256": "a85bd3ec1daa3ff99497fb67a26edd51480339432aca09010f570b7eb1f3648e",
+  "adminVersionCode": 47,
+  "adminVersionName": "3.3.14",
   "adminMandatory": true,
-  "adminMessage": "Novo visual premium, melhorias no áudio e gerenciamento de parceiros.",
-  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.13/ViraPlay-ADM-3.3.13.apk",
-  "adminSha256": "fbe7ebe7940fcd320272fe03080c77ee20956b67376ab2bf388ddf93fce47bb3"
+  "adminMessage": "Nova atualização ViraPlay disponível.",
+  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.14/ViraPlay-ADM-3.3.14.apk",
+  "adminSha256": "a9b36f2e7b9cabe838e871f8d258ae82f7aaa5efa7b5e997c790cafde22054b7"
 }
