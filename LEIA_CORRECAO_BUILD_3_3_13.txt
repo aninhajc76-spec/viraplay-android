@@ -1,0 +1,4 @@
+VPlayo 3.3.13 BUILD FIX
+
+Correção: import ausente de androidx.compose.ui.graphics.Brush em CommonComponents.kt.
+Versão permanece 3.3.13 / versionCode 46 porque a publicação anterior falhou.
