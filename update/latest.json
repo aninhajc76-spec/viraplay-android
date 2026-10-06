@@ -1,14 +1,14 @@
 {
-  "versionCode": 38,
-  "versionName": "3.3.5",
-  "mandatory": false,
+  "versionCode": 44,
+  "versionName": "3.3.11",
+  "mandatory": true,
   "message": "Nova atualização ViraPlay disponível.",
-  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.5/ViraPlay-3.3.5.apk",
-  "sha256": "3c73cbad2dad9bc8af22b922b257bdc855aa2572d10c4b64a2c6c9fdf5bf26ac",
-  "adminVersionCode": 38,
-  "adminVersionName": "3.3.5",
-  "adminMandatory": false,
+  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.11/ViraPlay-3.3.11.apk",
+  "sha256": "6b1354924af373488bb158d6ab725e76fc40367b89c04bc5583702c176b564a5",
+  "adminVersionCode": 44,
+  "adminVersionName": "3.3.11",
+  "adminMandatory": true,
   "adminMessage": "Nova atualização ViraPlay disponível.",
-  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.5/ViraPlay-ADM-3.3.5.apk",
-  "adminSha256": "d4cfe851819c17a551a24b82215d406bf790e8ff49a7a015e0b6db2f75f630a7"
+  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.11/ViraPlay-ADM-3.3.11.apk",
+  "adminSha256": "61eca0f6310b9b72f1270eec04693615854804f9bd234f0092289ece760e6ed4"
 }
