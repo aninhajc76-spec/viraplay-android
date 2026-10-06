@@ -1,0 +1,25 @@
+VPlayo 3.3.14 / versionCode 47 - FINAL AJUSTADO
+
+AJUSTADO COM BASE NOS TESTES REAIS:
+1. CELULAR:
+   - vídeo já funciona: Media3 continua como player principal
+   - preferência de áudio ampliada para PT-BR / PT / POR
+   - reconhece também rótulos como Português, Brasil, dublado e dub
+   - se o áudio realmente for incompatível, ativa o modo COMPAT
+
+2. ANDROID TV:
+   - se o vídeo falhar por MediaCodec/VideoRenderer/Decoder, o VPlayo muda automaticamente
+     para o modo COMPAT com LibVLC
+   - isso foi feito para casos como o filme que tem áudio mas não gera imagem na TV
+   - conteúdos que já funcionam normalmente continuam usando Media3
+
+3. MODO COMPAT:
+   - fica dentro do próprio VPlayo
+   - usa saída de áudio Android em modo estéreo de compatibilidade
+   - tenta português automaticamente
+   - mantém pause, +/-10s, barra de progresso e seletor de áudio
+
+IMPORTANTE:
+- Substitui o ZIP 3.3.14 anterior. Use ESTE.
+- Não altera Worker/Supabase.
+- Depois de importar, basta Publicar atualização ViraPlay.

@@ -1,0 +1,19 @@
+VPlayo 3.3.14 / versionCode 47
+
+FOCO DESTA VERSÃO: ÁUDIO INCOMPATÍVEL
+- mantém o design premium 3.3.13
+- mantém o player Media3 normal como primeira opção
+- quando o Media3 detecta faixa de áudio mas nenhuma é suportada, ativa automaticamente o modo COMPAT
+- modo COMPAT usa LibVLC embarcado no próprio APK para decodificação de mídia/áudio por software quando necessário
+- não abre aplicativo externo
+- continua com -10s, +10s, pause, barra de progresso, tela/zoom e voltar
+- seletor de áudio continua visível
+- no modo COMPAT, o seletor percorre as faixas que o LibVLC encontrar
+- tenta selecionar português automaticamente também no modo COMPAT
+- removida a restrição de canais de áudio que ainda estava presente no 3.3.13
+
+IMPORTANTE
+- o APK ficará maior porque o LibVLC inclui bibliotecas nativas
+- esta versão NÃO altera o Worker nem o Supabase
+- depois de importar, basta usar "Publicar atualização ViraPlay"
+- NÃO precisa rodar "Publicar Worker VPlayo" por causa desta versão

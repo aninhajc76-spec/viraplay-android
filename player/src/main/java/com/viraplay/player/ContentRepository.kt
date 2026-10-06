@@ -110,7 +110,20 @@ class ContentRepository(
 
     fun epg(item: CatalogItem): List<EpgProgram> {
         val sourceUrl = db.getMeta("playlist_url").orEmpty()
-        val streamId = item.sourceId ?: return emptyList()
-        return xtream.shortEpg(sourceUrl, streamId)
+        if (sourceUrl.isBlank()) return emptyList()
+
+        val candidateIds = buildList {
+            item.sourceId?.takeIf { it.isNotBlank() }?.let(::add)
+            db.liveVariants(item)
+                .mapNotNull { it.sourceId?.takeIf(String::isNotBlank) }
+                .forEach { if (it !in this) add(it) }
+        }
+
+        for (streamId in candidateIds) {
+            val programs = xtream.shortEpg(sourceUrl, streamId)
+            if (programs.isNotEmpty()) return programs
+        }
+
+        return emptyList()
     }
 }

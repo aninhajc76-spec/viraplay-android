@@ -216,27 +216,63 @@ class XtreamSync {
 
     fun shortEpg(playlistUrl: String, streamId: String): List<EpgProgram> {
         val credentials = SourceResolver.xtreamFromPlaylist(playlistUrl) ?: return emptyList()
-        return runCatching {
-            val json = Http.getText(
-                api(credentials, "get_short_epg", mapOf("stream_id" to streamId, "limit" to "5")),
-                maxChars = 1_500_000
-            )
-            val root = JSONObject(json)
-            val arr = root.optJSONArray("epg_listings") ?: return@runCatching emptyList()
-            buildList {
-                for (i in 0 until arr.length()) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    add(
-                        EpgProgram(
-                            title = decodeMaybeBase64(o.optString("title")).ifBlank { "Programação" },
-                            description = decodeMaybeBase64(o.optString("description")),
-                            start = o.optString("start"),
-                            end = o.optString("end")
-                        )
+
+        val attempts = listOf(
+            api(credentials, "get_short_epg", mapOf("stream_id" to streamId, "limit" to "10")),
+            api(credentials, "get_short_epg", mapOf("stream_id" to streamId)),
+            api(credentials, "get_simple_data_table", mapOf("stream_id" to streamId))
+        )
+
+        for (url in attempts) {
+            val programs = runCatching {
+                parseEpgResponse(
+                    Http.getText(url, maxChars = 2_500_000)
+                )
+            }.getOrDefault(emptyList())
+
+            if (programs.isNotEmpty()) return programs
+        }
+
+        return emptyList()
+    }
+
+    private fun parseEpgResponse(json: String): List<EpgProgram> {
+        val root = JSONObject(json)
+        val arr = root.optJSONArray("epg_listings")
+            ?: root.optJSONArray("listings")
+            ?: return emptyList()
+
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+
+                val title = decodeMaybeBase64(
+                    o.optString("title")
+                        .ifBlank { o.optString("name") }
+                ).ifBlank { "Programação" }
+
+                val description = decodeMaybeBase64(
+                    o.optString("description")
+                        .ifBlank { o.optString("descr") }
+                )
+
+                val start = o.optString("start")
+                    .ifBlank { o.optString("start_timestamp") }
+
+                val end = o.optString("end")
+                    .ifBlank { o.optString("stop") }
+                    .ifBlank { o.optString("end_timestamp") }
+
+                add(
+                    EpgProgram(
+                        title = title,
+                        description = description,
+                        start = start,
+                        end = end
                     )
-                }
+                )
             }
-        }.getOrDefault(emptyList())
+        }
     }
 
     private fun loadCategories(

@@ -52,6 +52,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.viraplay.shared.ContentType
 import kotlinx.coroutines.delay
+import org.videolan.libvlc.util.VLCVideoLayout
 
 private data class ScreenMode(
     val label: String,
@@ -103,10 +104,22 @@ private fun portugueseAudioChoice(tracks: Tracks): AudioTrackChoice? =
     audioChoices(tracks).firstOrNull { choice ->
         if (!choice.supported) return@firstOrNull false
         val format = choice.group.getTrackFormat(choice.trackIndex)
-        val lang = format.language?.lowercase().orEmpty()
+        val lang = format.language
+            ?.lowercase()
+            ?.replace("_", "")
+            ?.replace("-", "")
+            .orEmpty()
         val label = format.label?.lowercase().orEmpty()
-        lang == "pt" || lang == "pt-br" || lang == "por" || lang.startsWith("pt-") ||
-            label.contains("portugu") || label.contains("brazil")
+
+        lang in setOf("pt", "ptbr", "por", "pob", "ptb") ||
+            lang.startsWith("pt") ||
+            label.contains("portugu") ||
+            label.contains("brasil") ||
+            label.contains("brazil") ||
+            label.contains("pt-br") ||
+            label.contains("pt_br") ||
+            label.contains("dublado") ||
+            label.contains("dub")
     }
 
 private fun formatPlayerTime(ms: Long): String {
@@ -197,6 +210,11 @@ fun PlayerScreen(
         )
     }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var compatViewRef by remember { mutableStateOf<VLCVideoLayout?>(null) }
+    var compatMode by remember(item.itemKey) { mutableStateOf(false) }
+    var compatStartedForUrl by remember(item.itemKey) { mutableStateOf<String?>(null) }
+    var compatAudioLabel by remember(item.itemKey) { mutableStateOf("Compatibilidade") }
+    val compatEngine = remember(item.itemKey) { CompatVlcEngine(context) }
 
     val videoFocus = remember { FocusRequester() }
     val controlsFocus = remember { FocusRequester() }
@@ -224,13 +242,32 @@ fun PlayerScreen(
             .apply {
             addListener(object : Player.Listener {
                 override fun onPlayerError(playbackException: PlaybackException) {
-                    val raw = playbackException.message ?: "Falha na fonte de vídeo"
+                    val raw = buildString {
+                        append(playbackException.message.orEmpty())
+                        append(" ")
+                        append(playbackException.cause?.message.orEmpty())
+                    }
+
+                    val decoderProblem =
+                        raw.contains("MediaCodec", true) ||
+                        raw.contains("VideoRenderer", true) ||
+                        raw.contains("AudioRenderer", true) ||
+                        raw.contains("Decoder", true) ||
+                        raw.contains("format_supported=no", true)
+
+                    if (decoderProblem && !compatMode) {
+                        error = null
+                        compatMode = true
+                        return
+                    }
+
                     error = when {
                         raw.contains("403", true) || raw.contains("401", true) ->
                             "O servidor recusou esta reprodução. Verifique se a conta já está em uso em outro aparelho."
-                        raw.contains("MediaCodec", true) || raw.contains("VideoRenderer", true) || raw.contains("Decoder", true) ->
-                            "Esta TV não conseguiu decodificar este vídeo. O VPlayo tentou um decodificador alternativo; tente novamente ou escolha outra fonte/qualidade."
-                        else -> "Não foi possível reproduzir este conteúdo nesta TV. Tente novamente."
+                        decoderProblem ->
+                            "Este conteúdo ainda não foi decodificado neste aparelho. Tente novamente."
+                        else ->
+                            "Não foi possível reproduzir este conteúdo. Tente novamente."
                     }
                 }
 
@@ -256,7 +293,7 @@ fun PlayerScreen(
             volume = 1f
             trackSelectionParameters = trackSelectionParameters
                 .buildUpon()
-                .setPreferredAudioLanguage("pt")
+                .setPreferredAudioLanguages("pt-BR", "pt", "por")
                 .build()
 
             setMediaItem(MediaItem.fromUri(currentUrl))
@@ -268,8 +305,13 @@ fun PlayerScreen(
 
     fun persistProgress() {
         if (currentItem.type == ContentType.LIVE) return
-        val duration = player.duration.takeIf { it > 0L } ?: 0L
-        db.saveProgress(currentItem.itemKey, player.currentPosition, duration)
+        val duration = if (compatMode) {
+            compatEngine.duration()
+        } else {
+            player.duration.takeIf { it > 0L } ?: 0L
+        }
+        val position = if (compatMode) compatEngine.currentPosition() else player.currentPosition
+        db.saveProgress(currentItem.itemKey, position, duration)
     }
 
     fun play(newItem: CatalogItem) {
@@ -281,6 +323,10 @@ fun PlayerScreen(
         currentUrl = newUrl
         qualityLabelState = qualityLabel(newItem.name)
         portugueseApplied = false
+        compatMode = false
+        compatStartedForUrl = null
+        compatAudioLabel = "Compatibilidade"
+        compatEngine.stop()
         error = null
         retryCount = 0
 
@@ -364,6 +410,13 @@ fun PlayerScreen(
     }
 
     fun cycleAudio() {
+        if (compatMode) {
+            compatAudioLabel = compatEngine.cycleAudio()
+            audioLabelState = "COMPAT • $compatAudioLabel"
+            controlsVisible = true
+            return
+        }
+
         val allChoices = audioChoices(player.currentTracks)
         val choices = allChoices.filter { it.supported }
 
@@ -371,8 +424,10 @@ fun PlayerScreen(
             audioLabelState = "Nenhuma faixa detectada"
             return
         }
+
         if (choices.isEmpty()) {
-            audioLabelState = "Áudio incompatível"
+            compatMode = true
+            audioLabelState = "COMPAT"
             return
         }
 
@@ -383,7 +438,7 @@ fun PlayerScreen(
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                .setPreferredAudioLanguage("pt")
+                .setPreferredAudioLanguages("pt-BR", "pt", "por")
                 .build()
             audioLabelState = "AUTO / PT"
         } else {
@@ -476,8 +531,38 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(currentItem.itemKey, audioTrackCount) {
-        if (!portugueseApplied && audioTrackCount > 0) {
+    LaunchedEffect(
+        currentItem.itemKey,
+        currentUrl,
+        audioTrackCount,
+        audioSupportedCount,
+        compatMode
+    ) {
+        val incompatibleAudio =
+            audioTrackCount > 0 && audioSupportedCount == 0
+
+        if (incompatibleAudio && !compatMode) {
+            compatMode = true
+            audioLabelState = "COMPAT"
+        }
+
+        if (compatMode && compatStartedForUrl != currentUrl) {
+            val resumeAt = player.currentPosition.coerceAtLeast(
+                if (currentItem.itemKey == item.itemKey) startPosition else 0L
+            )
+            player.pause()
+            compatEngine.open(currentUrl, resumeAt)
+            compatStartedForUrl = currentUrl
+            delay(1200)
+            compatEngine.selectPortugueseAudio()?.let {
+                compatAudioLabel = it
+                audioLabelState = "COMPAT • $it"
+            }
+        }
+    }
+
+    LaunchedEffect(currentItem.itemKey, audioTrackCount, compatMode) {
+        if (!compatMode && !portugueseApplied && audioTrackCount > 0) {
             portugueseAudioChoice(player.currentTracks)?.let { choice ->
                 player.trackSelectionParameters = player.trackSelectionParameters
                     .buildUpon()
@@ -492,10 +577,17 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(currentItem.itemKey) {
+    LaunchedEffect(currentItem.itemKey, compatMode) {
         while (true) {
-            currentPositionMs = player.currentPosition.coerceAtLeast(0L)
-            durationMs = player.duration.takeIf { it > 0L } ?: 0L
+            if (compatMode) {
+                currentPositionMs = compatEngine.currentPosition()
+                durationMs = compatEngine.duration()
+                isPlaying = compatEngine.isPlaying()
+            } else {
+                currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+                durationMs = player.duration.takeIf { it > 0L } ?: 0L
+                isPlaying = player.isPlaying
+            }
             if (currentItem.type != ContentType.LIVE) persistProgress()
             delay(500)
         }
@@ -556,6 +648,7 @@ fun PlayerScreen(
     DisposableEffect(player) {
         onDispose {
             persistProgress()
+            compatEngine.release()
             player.release()
             activity?.let { act ->
                 WindowCompat.setDecorFitsSystemWindows(act.window, true)
@@ -578,9 +671,13 @@ fun PlayerScreen(
                         onTap = { controlsVisible = !controlsVisible },
                         onDoubleTap = {
                             if (currentItem.type != ContentType.LIVE) {
-                                player.seekTo((player.currentPosition + 10_000L).coerceAtMost(
-                                    player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                ))
+                                if (compatMode) {
+                                    compatEngine.seekBy(10_000L)
+                                } else {
+                                    player.seekTo((player.currentPosition + 10_000L).coerceAtMost(
+                                        player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                    ))
+                                }
                             }
                         }
                     )
@@ -607,40 +704,66 @@ fun PlayerScreen(
                 }
                 .focusable()
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    val view = LayoutInflater.from(ctx).inflate(
-                        R.layout.player_view_tv,
-                        null,
-                        false
-                    ) as PlayerView
-
-                    view.apply {
-                        playerViewRef = this
-                        this.player = player
-                        useController = false
-                        controllerShowTimeoutMs = 0
-                        controllerAutoShow = false
-                        if (isTv) {
-                            isFocusable = false
-                            isFocusableInTouchMode = false
+            if (compatMode) {
+                AndroidView(
+                    factory = { ctx ->
+                        VLCVideoLayout(ctx).also { view ->
+                            compatViewRef = view
+                            compatEngine.attach(view)
+                            view.keepScreenOn = true
+                            view.setBackgroundColor(AndroidColor.BLACK)
                         }
-                        keepScreenOn = true
-                        setBackgroundColor(AndroidColor.BLACK)
-                        setShutterBackgroundColor(AndroidColor.BLACK)
-                        setKeepContentOnPlayerReset(true)
-                        alpha = 1f
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                        applyPlayerScreenMode(player, this, screenModeIndex)
-                    }
-                },
-                update = { view ->
-                    playerViewRef = view
-                    view.player = player
-                    applyPlayerScreenMode(player, view, screenModeIndex)
-                },
-                modifier = Modifier.fillMaxSize().background(Color.Black)
-            )
+                    },
+                    update = { view ->
+                        compatViewRef = view
+                        compatEngine.attach(view)
+                        val scale = when (screenModeIndex) {
+                            0 -> 1f
+                            1 -> 1.06f
+                            2 -> 1.14f
+                            else -> 1.22f
+                        }
+                        view.scaleX = scale
+                        view.scaleY = scale
+                    },
+                    modifier = Modifier.fillMaxSize().background(Color.Black)
+                )
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        val view = LayoutInflater.from(ctx).inflate(
+                            R.layout.player_view_tv,
+                            null,
+                            false
+                        ) as PlayerView
+
+                        view.apply {
+                            playerViewRef = this
+                            this.player = player
+                            useController = false
+                            controllerShowTimeoutMs = 0
+                            controllerAutoShow = false
+                            if (isTv) {
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                            }
+                            keepScreenOn = true
+                            setBackgroundColor(AndroidColor.BLACK)
+                            setShutterBackgroundColor(AndroidColor.BLACK)
+                            setKeepContentOnPlayerReset(true)
+                            alpha = 1f
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                            applyPlayerScreenMode(player, this, screenModeIndex)
+                        }
+                    },
+                    update = { view ->
+                        playerViewRef = view
+                        view.player = player
+                        applyPlayerScreenMode(player, view, screenModeIndex)
+                    },
+                    modifier = Modifier.fillMaxSize().background(Color.Black)
+                )
+            }
 
             AnimatedVisibility(
                 visible = controlsVisible,
@@ -690,25 +813,49 @@ fun PlayerScreen(
                         ) {
                             if (isTv) {
                                 if (currentItem.type != ContentType.LIVE) {
-                                    TvPlayerControl("-10 s", { player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L)) })
+                                    TvPlayerControl("-10 s", {
+                                        if (compatMode) compatEngine.seekBy(-10_000L)
+                                        else player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
+                                    })
                                 }
                                 TvPlayerControl(if (isPlaying) "Pausar" else "Reproduzir", {
-                                    if (player.isPlaying) player.pause() else player.play()
+                                    if (compatMode) {
+                                        if (compatEngine.isPlaying()) compatEngine.pause() else compatEngine.play()
+                                    } else {
+                                        if (player.isPlaying) player.pause() else player.play()
+                                    }
                                     controlsVisible = true
                                 })
                                 if (currentItem.type != ContentType.LIVE) {
                                     TvPlayerControl("+10 s", {
-                                        val duration = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                        player.seekTo((player.currentPosition + 10_000L).coerceAtMost(duration))
+                                        if (compatMode) {
+                                            compatEngine.seekBy(10_000L)
+                                        } else {
+                                            val duration = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                            player.seekTo((player.currentPosition + 10_000L).coerceAtMost(duration))
+                                        }
                                     })
                                 }
                                 TvPlayerControl("Tela: ${screenModes[screenModeIndex].label}", {
                                     screenModeIndex = (screenModeIndex + 1) % screenModes.size
-                                    applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
+                                    if (compatMode) {
+                                        compatViewRef?.let { view ->
+                                            val scale = when (screenModeIndex) {
+                                                0 -> 1f
+                                                1 -> 1.06f
+                                                2 -> 1.14f
+                                                else -> 1.22f
+                                            }
+                                            view.scaleX = scale
+                                            view.scaleY = scale
+                                        }
+                                    } else {
+                                        applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
+                                    }
                                     controlsVisible = true
                                 })
                                 TvPlayerControl(
-                                    "Áudio: ${if (audioTrackCount == 0) "detectar" else audioLabelState}",
+                                    "Áudio: ${if (compatMode) "COMPAT • $compatAudioLabel" else if (audioTrackCount == 0) "detectar" else audioLabelState}",
                                     {
                                         cycleAudio()
                                         controlsVisible = true
@@ -725,13 +872,20 @@ fun PlayerScreen(
                             } else {
                                 if (currentItem.type != ContentType.LIVE) {
                                     AssistChip(
-                                        onClick = { player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L)) },
+                                        onClick = {
+                                            if (compatMode) compatEngine.seekBy(-10_000L)
+                                            else player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
+                                        },
                                         label = { Text("-10 s", fontSize = 11.sp) }
                                     )
                                 }
                                 AssistChip(
                                     onClick = {
-                                        if (player.isPlaying) player.pause() else player.play()
+                                        if (compatMode) {
+                                            if (compatEngine.isPlaying()) compatEngine.pause() else compatEngine.play()
+                                        } else {
+                                            if (player.isPlaying) player.pause() else player.play()
+                                        }
                                         controlsVisible = true
                                     },
                                     label = { Text(if (isPlaying) "Pausar" else "Reproduzir", fontSize = 11.sp) }
@@ -739,8 +893,12 @@ fun PlayerScreen(
                                 if (currentItem.type != ContentType.LIVE) {
                                     AssistChip(
                                         onClick = {
-                                            val d = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                            player.seekTo((player.currentPosition + 10_000L).coerceAtMost(d))
+                                            if (compatMode) {
+                                                compatEngine.seekBy(10_000L)
+                                            } else {
+                                                val d = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                                player.seekTo((player.currentPosition + 10_000L).coerceAtMost(d))
+                                            }
                                         },
                                         label = { Text("+10 s", fontSize = 11.sp) }
                                     )
@@ -749,7 +907,20 @@ fun PlayerScreen(
                                 AssistChip(
                                     onClick = {
                                         screenModeIndex = (screenModeIndex + 1) % screenModes.size
-                                        applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
+                                        if (compatMode) {
+                                            compatViewRef?.let { view ->
+                                                val scale = when (screenModeIndex) {
+                                                    0 -> 1f
+                                                    1 -> 1.06f
+                                                    2 -> 1.14f
+                                                    else -> 1.22f
+                                                }
+                                                view.scaleX = scale
+                                                view.scaleY = scale
+                                            }
+                                        } else {
+                                            applyPlayerScreenMode(player, playerViewRef, screenModeIndex)
+                                        }
                                         controlsVisible = true
                                     },
                                     label = { Text("Tela: ${screenModes[screenModeIndex].label}", fontSize = 11.sp) }
@@ -758,7 +929,7 @@ fun PlayerScreen(
                                     onClick = { cycleAudio(); controlsVisible = true },
                                     label = {
                                         Text(
-                                            "Áudio: ${if (audioTrackCount == 0) "detectar" else audioLabelState}",
+                                            "Áudio: ${if (compatMode) "COMPAT • $compatAudioLabel" else if (audioTrackCount == 0) "detectar" else audioLabelState}",
                                             fontSize = 11.sp
                                         )
                                     }
@@ -794,7 +965,9 @@ fun PlayerScreen(
                                     value = fraction,
                                     onValueChange = { newValue ->
                                         if (durationMs > 0L) {
-                                            player.seekTo((durationMs * newValue).toLong())
+                                            val target = (durationMs * newValue).toLong()
+                                            if (compatMode) compatEngine.seekTo(target)
+                                            else player.seekTo(target)
                                             controlsVisible = true
                                         }
                                     },

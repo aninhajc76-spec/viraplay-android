@@ -1,0 +1,16 @@
+VPlayo 3.3.14 / versionCode 47 - EPG + PRÉVIA FIX
+
+Incluído no mesmo pacote final 3.3.14:
+- EPG carrega ao selecionar/focar o canal
+- atraso reduzido para 350 ms
+- tenta o canal selecionado e também as outras qualidades/variantes do mesmo canal
+- tenta get_short_epg com limite, sem limite e get_simple_data_table
+- aceita respostas com epg_listings ou listings
+- mostra "Carregando programação..." enquanto consulta
+- quando o servidor realmente não fornece EPG, informa isso claramente
+- área da prévia deixa de ficar preta: mostra a imagem/logo do canal até o primeiro OK
+- primeiro OK inicia a prévia
+- segundo OK abre em tela cheia
+
+Mantém todos os ajustes de áudio/vídeo compatibilidade do pacote 3.3.14 anterior.
+Não altera Worker/Supabase.

@@ -15,6 +15,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -429,6 +434,7 @@ private fun TvHome(
                             "TV AO VIVO",
                             counts.live.toString(),
                             "canais",
+                            Icons.Filled.LiveTv,
                             Modifier.weight(1f),
                             VpCyan
                         ) { onSection(MainSection.LIVE) }
@@ -437,6 +443,7 @@ private fun TvHome(
                             "FILMES",
                             counts.movies.toString(),
                             "títulos",
+                            Icons.Filled.Movie,
                             Modifier.weight(1f),
                             VpPurple
                         ) { onSection(MainSection.MOVIES) }
@@ -450,6 +457,7 @@ private fun TvHome(
                             "SÉRIES",
                             counts.series.toString(),
                             "títulos",
+                            Icons.Filled.VideoLibrary,
                             Modifier.weight(1f),
                             VpGreen
                         ) { onSection(MainSection.SERIES) }
@@ -458,6 +466,7 @@ private fun TvHome(
                             "CONTINUAR",
                             counts.continueWatching.toString(),
                             "em andamento",
+                            Icons.Filled.PlayArrow,
                             Modifier.weight(1f),
                             VpGold
                         ) { onContinue() }
@@ -524,6 +533,7 @@ private fun PremiumHomeCard(
     title: String,
     value: String,
     subtitle: String,
+    icon: ImageVector,
     modifier: Modifier,
     accent: Color,
     onClick: () -> Unit
@@ -544,11 +554,25 @@ private fun PremiumHomeCard(
                 .padding(17.dp)
         ) {
             Surface(
-                color = accent.copy(alpha = .13f),
+                color = accent.copy(alpha = .16f),
                 shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    accent.copy(alpha = .24f)
+                ),
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Box(Modifier.size(42.dp))
+                Box(
+                    Modifier.size(42.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = accent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Column(Modifier.align(Alignment.BottomStart)) {
@@ -740,6 +764,7 @@ private fun TvLive(
     var selected by remember { mutableStateOf<CatalogItem?>(null) }
     var previewed by remember { mutableStateOf<CatalogItem?>(null) }
     var epg by remember { mutableStateOf<List<EpgProgram>>(emptyList()) }
+    var epgLoading by remember { mutableStateOf(false) }
     var totalCount by remember { mutableIntStateOf(db.count(ContentType.LIVE)) }
     var limit by remember(selectedCategory, search) { mutableIntStateOf(700) }
     val categoryListState = rememberLazyListState(TvLiveSession.categoryIndex, TvLiveSession.categoryOffset)
@@ -802,10 +827,16 @@ private fun TvLive(
     }
 
     LaunchedEffect(selected?.itemKey) {
-        epg = emptyList()
-        val item = selected ?: return@LaunchedEffect
-        delay(900)
+        val item = selected ?: run {
+            epg = emptyList()
+            epgLoading = false
+            return@LaunchedEffect
+        }
+
+        epgLoading = true
+        delay(350)
         epg = withContext(Dispatchers.IO) { repository.epg(item) }
+        epgLoading = false
     }
 
     Row(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -906,6 +937,7 @@ private fun TvLive(
             item = selected,
             previewItem = previewed,
             epg = epg,
+            epgLoading = epgLoading,
             modifier = Modifier.weight(0.95f).fillMaxHeight(),
             onPlay = { selected?.let(onOpen) },
             onFavorite = {
@@ -946,6 +978,7 @@ private fun TvLivePreview(
     item: CatalogItem?,
     previewItem: CatalogItem?,
     epg: List<EpgProgram>,
+    epgLoading: Boolean,
     modifier: Modifier,
     onPlay: () -> Unit,
     onFavorite: () -> Unit
@@ -988,9 +1021,34 @@ private fun TvLivePreview(
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
+                    if (!item.image.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.image,
+                            contentDescription = item.name,
+                            contentScale = ContentScale.Fit,
+                            alpha = .52f,
+                            modifier = Modifier.fillMaxSize().padding(24.dp)
+                        )
+                    }
+
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = .20f),
+                                    Color.Black.copy(alpha = .78f)
+                                )
+                            )
+                        )
+                    )
+
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Prévia", color = VpCyan, fontWeight = FontWeight.Bold)
-                        Text("OK: iniciar prévia • OK novamente: tela cheia", color = VpMuted, fontSize = 11.sp)
+                        Text("Prévia do canal", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text(
+                            "OK: iniciar prévia • OK novamente: tela cheia",
+                            color = Color.White.copy(alpha = .72f),
+                            fontSize = 10.sp
+                        )
                     }
                 }
             }
@@ -1029,9 +1087,19 @@ private fun TvLivePreview(
             Text("Programação", color = VpCyan, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(5.dp))
 
-            if (epg.isEmpty()) {
+            if (epgLoading) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        color = VpCyan,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Carregando programação...", color = VpMuted, fontSize = 11.sp)
+                }
+            } else if (epg.isEmpty()) {
                 Text(
-                    "Programação não disponível para este canal.",
+                    "EPG não fornecido pelo servidor para este canal.",
                     color = VpMuted,
                     fontSize = 11.sp
                 )

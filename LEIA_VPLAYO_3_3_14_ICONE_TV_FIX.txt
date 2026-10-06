@@ -1,0 +1,13 @@
+VPlayo 3.3.14 / versionCode 47 - TV HOME ICON FIX
+
+Correção visual:
+- os quadrados dos cards da página inicial da TV agora exibem ícones de verdade
+- TV ao vivo: ícone de televisão
+- Filmes: ícone de filme
+- Séries: ícone de biblioteca/vídeo
+- Continuar: ícone de play
+- mantém o mesmo padrão visual premium do celular
+- mantém áudio/vídeo compatibilidade + EPG/prévia do pacote anterior
+
+Use ESTE ZIP no lugar do anterior.
+Não altera Worker/Supabase.

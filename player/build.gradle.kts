@@ -4,8 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 46
-val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.13"
+val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 47
+val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.14"
 
 android {
     namespace = "com.viraplay.player"
@@ -78,6 +78,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+
+    implementation("org.videolan.android:libvlc-all:3.7.0")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.zxing:core:3.5.3")
