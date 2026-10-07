@@ -234,6 +234,8 @@ fun PlayerScreen(
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(12_000)
+            .setReadTimeoutMs(20_000)
         val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -242,33 +244,26 @@ fun PlayerScreen(
             .apply {
             addListener(object : Player.Listener {
                 override fun onPlayerError(playbackException: PlaybackException) {
+                    // Se o modo COMPAT já assumiu, ignore erros tardios do Media3.
+                    if (compatMode) return
+
                     val raw = buildString {
                         append(playbackException.message.orEmpty())
                         append(" ")
                         append(playbackException.cause?.message.orEmpty())
                     }
 
-                    val decoderProblem =
+                    // Qualquer falha real do Media3 tenta o motor de compatibilidade.
+                    // O alerta só aparece se o COMPAT também não iniciar.
+                    error = null
+                    audioLabelState = if (
                         raw.contains("MediaCodec", true) ||
                         raw.contains("VideoRenderer", true) ||
                         raw.contains("AudioRenderer", true) ||
                         raw.contains("Decoder", true) ||
                         raw.contains("format_supported=no", true)
-
-                    if (decoderProblem && !compatMode) {
-                        error = null
-                        compatMode = true
-                        return
-                    }
-
-                    error = when {
-                        raw.contains("403", true) || raw.contains("401", true) ->
-                            "O servidor recusou esta reprodução. Verifique se a conta já está em uso em outro aparelho."
-                        decoderProblem ->
-                            "Este conteúdo ainda não foi decodificado neste aparelho. Tente novamente."
-                        else ->
-                            "Não foi possível reproduzir este conteúdo. Tente novamente."
-                    }
+                    ) "COMPAT" else "AUTO → COMPAT"
+                    compatMode = true
                 }
 
                 override fun onIsPlayingChanged(value: Boolean) {
@@ -550,7 +545,7 @@ fun PlayerScreen(
             val resumeAt = player.currentPosition.coerceAtLeast(
                 if (currentItem.itemKey == item.itemKey) startPosition else 0L
             )
-            player.pause()
+            player.stop()
             compatEngine.open(currentUrl, resumeAt)
             compatStartedForUrl = currentUrl
             delay(1200)
@@ -558,6 +553,23 @@ fun PlayerScreen(
                 compatAudioLabel = it
                 audioLabelState = "COMPAT • $it"
             }
+        }
+    }
+
+    LaunchedEffect(compatMode, currentUrl, compatStartedForUrl) {
+        if (!compatMode || compatStartedForUrl != currentUrl) return@LaunchedEffect
+
+        delay(12_000)
+
+        if (compatMode && compatStartedForUrl == currentUrl && !compatEngine.isPlaying()) {
+            if (currentItem.type == ContentType.LIVE && currentUrl.endsWith(".ts", ignoreCase = true)) {
+                currentUrl = currentUrl.dropLast(3) + ".m3u8"
+                compatStartedForUrl = null
+                error = null
+                return@LaunchedEffect
+            }
+
+            error = "O VPlayo tentou o modo normal e o modo de compatibilidade, mas o servidor não iniciou este conteúdo."
         }
     }
 
@@ -604,7 +616,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(error) {
-        if (error != null && retryCount < 2) {
+        if (error != null && retryCount < 2 && !compatMode) {
             retryCount++
             delay(1_200)
             error = null
@@ -1008,8 +1020,15 @@ fun PlayerScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(onClick = {
                                 error = null
-                                player.prepare()
-                                player.playWhenReady = true
+                                retryCount = 0
+                                if (compatMode) {
+                                    compatEngine.stop()
+                                    compatEngine.open(currentUrl, currentPositionMs)
+                                    compatStartedForUrl = currentUrl
+                                } else {
+                                    player.prepare()
+                                    player.playWhenReady = true
+                                }
                             }) {
                                 Text("Tentar novamente")
                             }

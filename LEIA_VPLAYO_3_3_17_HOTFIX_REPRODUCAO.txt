@@ -1,0 +1,12 @@
+VPlayo 3.3.17 / versionCode 50
+
+HOTFIX DE REPRODUÇÃO
+- corrige alerta de erro aparecendo por cima de vídeo que já estava tocando no COMPAT;
+- qualquer falha real do Media3 tenta LibVLC antes de mostrar erro;
+- Media3 é parado ao trocar para COMPAT;
+- prévia ao vivo usa o mesmo User-Agent, redirects e timeouts do player principal;
+- prévia troca para LibVLC se Media3 falhar ou ficar travado;
+- live .ts tenta .m3u8 automaticamente se o COMPAT também não iniciar;
+- cache/reconexão do LibVLC reforçados;
+- botão Tentar novamente reinicia o motor correto;
+- mantém tudo da 3.3.16.

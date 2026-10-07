@@ -17,7 +17,7 @@ class CompatVlcEngine(context: Context) {
     private val libVlc = LibVLC(
         context.applicationContext,
         arrayListOf(
-            "--network-caching=1200",
+            "--network-caching=1800",
             "--audio-time-stretch",
             "--no-video-title-show"
         )
@@ -49,7 +49,8 @@ class CompatVlcEngine(context: Context) {
 
         val media = Media(libVlc, Uri.parse(url))
         media.setHWDecoderEnabled(true, false)
-        media.addOption(":network-caching=1200")
+        media.addOption(":network-caching=1800")
+        media.addOption(":http-reconnect=true")
         media.addOption(":clock-jitter=0")
         media.addOption(":clock-synchro=0")
 
