@@ -51,8 +51,6 @@ class CompatVlcEngine(context: Context) {
         media.setHWDecoderEnabled(true, false)
         media.addOption(":network-caching=1800")
         media.addOption(":http-reconnect=true")
-        media.addOption(":clock-jitter=0")
-        media.addOption(":clock-synchro=0")
 
         player.setMedia(media)
         media.release()

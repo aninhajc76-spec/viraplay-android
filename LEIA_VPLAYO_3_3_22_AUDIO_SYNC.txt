@@ -1,0 +1,20 @@
+VPlayo 3.3.22 / versionCode 55
+HOTFIX ESPECÍFICO DE SINCRONIA DE ÁUDIO AO VIVO
+
+O que foi alterado:
+- Detecta canais AO VIVO em MPEG-TS que estejam usando áudio AAC/LATM (audio/mp4a-latm).
+- Somente nessa combinação o player muda automaticamente para o motor COMPAT/VLC.
+- O motor COMPAT agora usa o relógio padrão do VLC; foram removidas opções que
+  desativavam a sincronização/jitter do clock.
+- Em AO VIVO o COMPAT mantém a faixa padrão do servidor e não troca automaticamente
+  para outra faixa em português depois de iniciar.
+- Filmes e séries continuam com o comportamento atual.
+- Design, startup, catálogo, provedores, EPG e demais funções da 3.3.21 permanecem.
+
+Teste recomendado:
+- Telecine Action mostrado no teste anterior.
+- Após abrir, o botão de áudio deve indicar COMPAT/sincronizado nessa combinação.
+- Verificar boca/voz por pelo menos 1 minuto.
+
+Não precisa SQL.
+Não precisa Worker.

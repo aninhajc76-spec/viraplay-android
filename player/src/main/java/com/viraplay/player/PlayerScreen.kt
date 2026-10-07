@@ -100,6 +100,19 @@ private fun selectedAudioLabel(tracks: Tracks): String {
     return choices.firstOrNull { it.group.isTrackSelected(it.trackIndex) }?.label ?: "AUTO"
 }
 
+private fun selectedAudioMime(tracks: Tracks): String? {
+    tracks.groups
+        .filter { it.type == C.TRACK_TYPE_AUDIO }
+        .forEach { group ->
+            for (i in 0 until group.length) {
+                if (group.isTrackSelected(i)) {
+                    return group.getTrackFormat(i).sampleMimeType
+                }
+            }
+        }
+    return null
+}
+
 private fun portugueseAudioChoice(tracks: Tracks): AudioTrackChoice? =
     audioChoices(tracks).firstOrNull { choice ->
         if (!choice.supported) return@firstOrNull false
@@ -555,9 +568,26 @@ fun PlayerScreen(
         val incompatibleAudio =
             audioTrackCount > 0 && audioSupportedCount == 0
 
-        if (incompatibleAudio && !compatMode) {
+        val liveMime = selectedAudioMime(player.currentTracks).orEmpty()
+        val cleanUrl = currentUrl.substringBefore('?')
+        val isMpegTsLive =
+            currentItem.type == ContentType.LIVE &&
+                (
+                    cleanUrl.endsWith(".ts", ignoreCase = true) ||
+                    currentItem.containerExtension.equals("ts", ignoreCase = true) ||
+                    currentUrl.contains("output=mpegts", ignoreCase = true)
+                )
+
+        // Alguns servidores IPTV enviam AAC/LATM dentro de MPEG-TS com timestamps
+        // que certos firmwares de Android TV reproduzem fora de sincronia no Media3.
+        // Nessa combinação específica, usa o motor COMPAT/VLC, que mantém o relógio
+        // de áudio e vídeo do transporte juntos.
+        val liveLatmNeedsCompat =
+            isMpegTsLive && liveMime.equals("audio/mp4a-latm", ignoreCase = true)
+
+        if ((incompatibleAudio || liveLatmNeedsCompat) && !compatMode) {
             compatMode = true
-            audioLabelState = "COMPAT"
+            audioLabelState = if (liveLatmNeedsCompat) "COMPAT • sincronizado" else "COMPAT"
         }
 
         if (compatMode && compatStartedForUrl != currentUrl) {
@@ -568,9 +598,14 @@ fun PlayerScreen(
             compatEngine.open(currentUrl, resumeAt)
             compatStartedForUrl = currentUrl
             delay(1200)
-            compatEngine.selectPortugueseAudio()?.let {
-                compatAudioLabel = it
-                audioLabelState = "COMPAT • $it"
+            if (currentItem.type != ContentType.LIVE) {
+                compatEngine.selectPortugueseAudio()?.let {
+                    compatAudioLabel = it
+                    audioLabelState = "COMPAT • $it"
+                }
+            } else {
+                compatAudioLabel = "Sincronizado"
+                audioLabelState = "COMPAT • sincronizado"
             }
         }
     }
