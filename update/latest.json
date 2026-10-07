@@ -1,14 +1,14 @@
 {
-  "versionCode": 51,
-  "versionName": "3.3.18",
+  "versionCode": 52,
+  "versionName": "3.3.19",
   "mandatory": true,
   "message": "Teste 🌐",
-  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.18/ViraPlay-3.3.18.apk",
-  "sha256": "ac481deda6db40d822bb4f559c1e8f1b55db1bb247ec2d2bb8789d74181d4286",
-  "adminVersionCode": 51,
-  "adminVersionName": "3.3.18",
+  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.19/ViraPlay-3.3.19.apk",
+  "sha256": "68d7780b552288473c7ce668fe5dd51b4c6c33b1926abe97817932b5236aab00",
+  "adminVersionCode": 52,
+  "adminVersionName": "3.3.19",
   "adminMandatory": true,
   "adminMessage": "Teste 🌐",
-  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.18/ViraPlay-ADM-3.3.18.apk",
-  "adminSha256": "8bd619511080f4cb62f83487ab3c02249b5e5241464cf489cfbcf8bd28b3940f"
+  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.19/ViraPlay-ADM-3.3.19.apk",
+  "adminSha256": "21c821c0db1f147a386a63a67e98784430d9a52d8e21192ca4757b265718ccc3"
 }
