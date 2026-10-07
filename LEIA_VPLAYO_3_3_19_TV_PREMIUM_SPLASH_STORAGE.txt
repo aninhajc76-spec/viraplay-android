@@ -1,0 +1,35 @@
+VPlayo 3.3.19 / versionCode 52
+TV PREMIUM + SPLASH + ÍCONE + ARMAZENAMENTO
+
+MELHORIAS DE DESIGN
+- nova tela inicial de Android TV/emulador com menu lateral premium;
+- hero grande usando arte real do catálogo;
+- seção Continue assistindo em cartões horizontais;
+- navegação superior de Ao vivo/Filmes/Séries/Favoritos refinada;
+- foco do controle remoto mais forte com identidade roxo/ciano;
+- categorias e painel de prévia com acabamento neon mais próximo do mockup aprovado;
+- celular continua com o layout mobile atual para preservar usabilidade.
+
+INICIALIZAÇÃO E ÍCONE
+- splash Compose novo com entrada do símbolo, brilho, wordmark e saída suave;
+- ícone do launcher refinado mantendo a marca VPlayo;
+- sem vídeo pesado no APK: a animação é feita por código Compose.
+
+ARMAZENAMENTO
+- mantém apenas a geração atual do catálogo;
+- quando o banco SQLite ultrapassa 220 MB, o VPlayo compacta o banco com VACUUM;
+- compactação é limitada a no máximo uma vez a cada 5 dias para não afetar desempenho;
+- isso trata o caso em que Dados do usuário chegam a centenas de MB/1 GB mesmo com cache pequeno.
+
+SOBRE O APK DE ~200 MB
+- atualização NÃO acumula APKs antigos: a versão nova substitui a anterior;
+- o principal responsável pelo tamanho atual é o LibVLC com bibliotecas nativas para compatibilidade de áudio/vídeo;
+- não removemos LibVLC nesta versão porque ele já resolveu conteúdos que o Media3 não tocava;
+- na Play Store, o melhor caminho é publicar AAB para o Google entregar apenas a arquitetura necessária ao aparelho;
+- para download direto, mantemos o APK universal por enquanto para não quebrar celulares, TVs e emuladores.
+
+ESTABILIDADE
+- parte de reprodução permanece baseada na 3.3.18 estável;
+- não mexe no login de Provedor/DNS/M3U/Código;
+- não mexe em Supabase nem Worker;
+- não precisa executar SQL.

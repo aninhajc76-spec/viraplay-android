@@ -19,6 +19,10 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -102,6 +106,7 @@ fun TvShell(
             accessNotice = accessNotice,
             onSection = onSection,
             onContinue = { showContinue = true },
+            onOpen = onOpen,
             onSupport = onSupport,
             onSettings = onSettings
         )
@@ -161,6 +166,7 @@ private fun TvHome(
     accessNotice: String?,
     onSection: (MainSection) -> Unit,
     onContinue: () -> Unit,
+    onOpen: (CatalogItem) -> Unit,
     onSupport: () -> Unit,
     onSettings: () -> Unit
 ) {
@@ -173,356 +179,274 @@ private fun TvHome(
 
     var counts by remember { mutableStateOf(readCounts()) }
     var featured by remember { mutableStateOf<CatalogItem?>(null) }
+    var continueItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
     val firstFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        delay(120)
+        delay(140)
         runCatching { firstFocus.requestFocus() }
     }
 
     LaunchedEffect(version) {
         withContext(Dispatchers.IO) {
             counts = readCounts()
-            featured = db.continueWatching(10).firstOrNull()
-                ?: db.query(ContentType.MOVIE, limit = 12).firstOrNull()
+            continueItems = db.continueWatching(10)
+            featured = continueItems.firstOrNull()
+                ?: db.query(ContentType.MOVIE, limit = 20).firstOrNull()
+                ?: db.query(ContentType.SERIES, limit = 20).firstOrNull()
         }
     }
 
-    Box(
+    Row(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF02050C))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(Color(0xFF02040B), Color(0xFF07142B), Color(0xFF090722))
+                )
+            )
     ) {
-        if (!featured?.image.isNullOrBlank()) {
-            AsyncImage(
-                model = featured?.image,
-                contentDescription = featured?.name,
-                contentScale = ContentScale.Crop,
-                alpha = .24f,
-                modifier = Modifier.fillMaxSize()
+        // Menu lateral: pensado para controle remoto e inspirado no mockup aprovado.
+        Column(
+            Modifier
+                .width(225.dp)
+                .fillMaxHeight()
+                .background(Color(0xFF05091A).copy(alpha = .96f))
+                .padding(horizontal = 18.dp, vertical = 18.dp)
+        ) {
+            BrandWordmark(large = false)
+            Text(
+                "TV EXPERIENCE",
+                color = VpCyan.copy(alpha = .82f),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.8.sp,
+                modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 18.dp)
+            )
+
+            TvSideRailButton("Início", Icons.Filled.Home, true, Modifier.focusRequester(firstFocus)) { }
+            TvSideRailButton("Ao vivo", Icons.Filled.LiveTv, false) { onSection(MainSection.LIVE) }
+            TvSideRailButton("Filmes", Icons.Filled.Movie, false) { onSection(MainSection.MOVIES) }
+            TvSideRailButton("Séries", Icons.Filled.VideoLibrary, false) { onSection(MainSection.SERIES) }
+            TvSideRailButton("Favoritos", Icons.Filled.Favorite, false) { onSection(MainSection.FAVORITES) }
+            TvSideRailButton("Continuar", Icons.Filled.History, false) { onContinue() }
+
+            Spacer(Modifier.weight(1f))
+
+            TvSideRailButton("Configurações", Icons.Filled.Settings, false) { onSettings() }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "VPlayo ${BuildConfig.VERSION_NAME}",
+                color = VpMuted,
+                fontSize = 9.sp,
+                modifier = Modifier.padding(horizontal = 12.dp)
             )
         }
 
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(
-                    listOf(
-                        Color(0xFF02050C),
-                        Color(0xFF02050C).copy(alpha = .88f),
-                        Color(0xFF02050C).copy(alpha = .55f)
-                    )
-                )
-            )
-        )
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color.Transparent,
-                        Color(0xFF02050C).copy(alpha = .30f),
-                        Color(0xFF02050C)
-                    )
-                )
-            )
-        )
-
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 34.dp, vertical = 16.dp)
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                BrandWordmark(large = true)
-                Spacer(Modifier.width(16.dp))
-                Surface(
-                    color = Color.White.copy(alpha = .06f),
-                    shape = RoundedCornerShape(50),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .10f))
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(7.dp).background(VpGreen, RoundedCornerShape(50)))
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            "TV EXPERIENCE",
-                            color = Color.White.copy(alpha = .88f),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                Column {
+                    Text("Bem-vindo ao VPlayo", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text(status, color = VpMuted, fontSize = 10.sp, maxLines = 1)
                 }
                 Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "VPlayo ${BuildConfig.VERSION_NAME}",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(status, color = VpMuted, fontSize = 9.sp, maxLines = 1)
+                accessNotice?.let {
+                    Surface(
+                        color = VpPurple.copy(alpha = .14f),
+                        shape = RoundedCornerShape(50),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .36f))
+                    ) {
+                        Text(it, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp))
+                    }
                 }
-            }
-
-            accessNotice?.let {
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    color = VpPurple.copy(alpha = .12f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .30f))
-                ) {
-                    Text(
-                        it,
-                        color = Color.White.copy(alpha = .92f),
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                        fontSize = 10.sp
-                    )
-                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Ajustes", tint = Color.White) }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            Row(
-                Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            // Hero principal, com backdrop real do catálogo quando disponível.
+            FocusTile(
+                onClick = { featured?.let(onOpen) ?: onSection(MainSection.MOVIES) },
+                modifier = Modifier.fillMaxWidth().weight(1.12f)
             ) {
-                FocusTile(
-                    onClick = {
-                        featured?.let { item ->
-                            when (item.type) {
-                                ContentType.LIVE -> onSection(MainSection.LIVE)
-                                ContentType.SERIES, ContentType.EPISODE -> onSection(MainSection.SERIES)
-                                else -> onSection(MainSection.MOVIES)
-                            }
-                        } ?: onSection(MainSection.MOVIES)
-                    },
-                    modifier = Modifier
-                        .weight(1.48f)
-                        .fillMaxHeight()
-                        .focusRequester(firstFocus)
-                ) {
+                Box(Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = featured?.backdrop ?: featured?.image,
+                        contentDescription = featured?.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
                     Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFF04101F).copy(alpha = .98f),
+                                    Color(0xFF07152A).copy(alpha = .80f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                    )
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color(0xFF030817).copy(alpha = .85f))
+                            )
+                        )
+                    )
+
+                    Column(
                         Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        Color(0xFF07192B),
-                                        Color(0xFF0A1730),
-                                        Color(0xFF160D2E)
-                                    )
-                                )
-                            )
+                            .align(Alignment.CenterStart)
+                            .padding(start = 28.dp, end = 18.dp)
+                            .fillMaxWidth(.54f)
                     ) {
-                        if (!featured?.image.isNullOrBlank()) {
-                            AsyncImage(
-                                model = featured?.image,
-                                contentDescription = featured?.name,
-                                contentScale = ContentScale.Crop,
-                                alpha = .42f,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-
-                        Box(
-                            Modifier.fillMaxSize().background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color(0xFF04101F).copy(alpha = .98f),
-                                        Color(0xFF04101F).copy(alpha = .72f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                        )
-                        Box(
-                            Modifier.fillMaxSize().background(
-                                Brush.verticalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = .62f))
-                                )
-                            )
-                        )
-
-                        Column(
-                            Modifier.fillMaxSize().padding(30.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
+                        Surface(
+                            color = VpPurple.copy(alpha = .92f),
+                            shape = RoundedCornerShape(50)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    color = VpCyan.copy(alpha = .14f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .36f)),
-                                    shape = RoundedCornerShape(50)
+                            Text(
+                                if (featured?.type == ContentType.LIVE) "AO VIVO" else "DESTAQUE",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            featured?.name ?: "Seu conteúdo em uma experiência premium",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        featured?.plot?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                it,
+                                color = Color.White.copy(alpha = .76f),
+                                fontSize = 11.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 7.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Surface(color = VpPurple, shape = RoundedCornerShape(14.dp)) {
+                                Row(
+                                    Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        "DESTAQUE",
-                                        color = VpCyan,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
-                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-                                    )
+                                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Assistir agora", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
-                                Spacer(Modifier.width(9.dp))
-                                Text(
-                                    if (featured?.progressFraction ?: 0f > 0f) "CONTINUAR ASSISTINDO"
-                                    else "ESCOLHIDO PARA VOCÊ",
-                                    color = Color.White.copy(alpha = .68f),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
-
-                            Column(Modifier.widthIn(max = 520.dp)) {
+                            Surface(
+                                color = Color.Black.copy(alpha = .46f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .18f)),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
                                 Text(
-                                    featured?.name ?: "Uma experiência de streaming mais premium",
-                                    color = Color.White,
-                                    fontSize = 36.sp,
-                                    lineHeight = 39.sp,
-                                    fontWeight = FontWeight.Black,
-                                    maxLines = 2
+                                    featured?.categoryName ?: "VPlayo",
+                                    color = Color.White.copy(alpha = .88f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    fontSize = 11.sp
                                 )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    "Filmes, séries e TV ao vivo em um visual mais limpo, rápido e pensado para o controle remoto.",
-                                    color = Color.White.copy(alpha = .72f),
-                                    fontSize = 11.sp,
-                                    maxLines = 2
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Surface(
-                                        color = Color.White,
-                                        shape = RoundedCornerShape(50)
-                                    ) {
-                                        Text(
-                                            if (featured != null) "▶  ABRIR DESTAQUE" else "EXPLORAR FILMES",
-                                            color = Color(0xFF03101D),
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
-                                        )
-                                    }
-                                    Surface(
-                                        color = Color.White.copy(alpha = .08f),
-                                        shape = RoundedCornerShape(50),
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            1.dp,
-                                            Color.White.copy(alpha = .16f)
-                                        )
-                                    ) {
-                                        Text(
-                                            "${counts.movies + counts.series} títulos",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp)
-                                        )
-                                    }
-                                }
                             }
                         }
-                    }
-                }
-
-                Column(
-                    Modifier.weight(1f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        PremiumHomeCard(
-                            "TV AO VIVO",
-                            counts.live.toString(),
-                            "canais",
-                            Icons.Filled.LiveTv,
-                            Modifier.weight(1f),
-                            VpCyan
-                        ) { onSection(MainSection.LIVE) }
-
-                        PremiumHomeCard(
-                            "FILMES",
-                            counts.movies.toString(),
-                            "títulos",
-                            Icons.Filled.Movie,
-                            Modifier.weight(1f),
-                            VpPurple
-                        ) { onSection(MainSection.MOVIES) }
-                    }
-
-                    Row(
-                        Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        PremiumHomeCard(
-                            "SÉRIES",
-                            counts.series.toString(),
-                            "títulos",
-                            Icons.Filled.VideoLibrary,
-                            Modifier.weight(1f),
-                            VpGreen
-                        ) { onSection(MainSection.SERIES) }
-
-                        PremiumHomeCard(
-                            "CONTINUAR",
-                            counts.continueWatching.toString(),
-                            "em andamento",
-                            Icons.Filled.PlayArrow,
-                            Modifier.weight(1f),
-                            VpGold
-                        ) { onContinue() }
-                    }
-
-                    Row(
-                        Modifier.height(82.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        PremiumActionCard(
-                            "FAVORITOS",
-                            "Sua seleção",
-                            Modifier.weight(1f)
-                        ) { onSection(MainSection.FAVORITES) }
-
-                        PremiumActionCard(
-                            "CONFIGURAÇÕES",
-                            "Qualidade, PIN e aparelho",
-                            Modifier.weight(1f),
-                            onSettings
-                        )
-                    }
-
-                    Row(
-                        Modifier.height(70.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        PremiumActionCard(
-                            "SUPORTE",
-                            "WhatsApp e QR Code",
-                            Modifier.weight(1f),
-                            onSupport
-                        )
-                        PremiumActionCard(
-                            "VPLAYO",
-                            "Streaming otimizado",
-                            Modifier.weight(1f)
-                        ) { }
                     }
                 }
             }
 
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(14.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "VPlayo",
-                    color = VpCyan,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 11.sp
-                )
-                Spacer(Modifier.width(9.dp))
-                Box(Modifier.width(4.dp).height(4.dp).background(VpMuted, RoundedCornerShape(50)))
-                Spacer(Modifier.width(9.dp))
-                Text("Filmes • Séries • TV ao vivo", color = VpMuted, fontSize = 9.sp)
+                Text("Continue assistindo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.weight(1f))
-                Text("Controle remoto otimizado", color = VpMuted, fontSize = 9.sp)
+                Text("${counts.live} canais • ${counts.movies} filmes • ${counts.series} séries", color = VpMuted, fontSize = 9.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+
+            if (continueItems.isEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().height(108.dp)) {
+                    PremiumActionCard("Ao vivo", "${counts.live} canais", Modifier.weight(1f)) { onSection(MainSection.LIVE) }
+                    PremiumActionCard("Filmes", "${counts.movies} disponíveis", Modifier.weight(1f)) { onSection(MainSection.MOVIES) }
+                    PremiumActionCard("Séries", "${counts.series} disponíveis", Modifier.weight(1f)) { onSection(MainSection.SERIES) }
+                    PremiumActionCard("Favoritos", "Acesso rápido", Modifier.weight(1f)) { onSection(MainSection.FAVORITES) }
+                }
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(118.dp)
+                ) {
+                    items(continueItems.take(6), key = { it.itemKey }) { item ->
+                        TvLandscapeCard(item = item, onClick = { onOpen(item) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvSideRailButton(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    FocusTile(onClick = onClick, modifier = modifier.fillMaxWidth().height(52.dp)) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .88f), Color(0xFF2B1A78)))
+                    else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                )
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, label, tint = if (selected) Color.White else VpCyan, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(label, color = Color.White, fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold, fontSize = 12.sp)
+        }
+    }
+    Spacer(Modifier.height(7.dp))
+}
+
+@Composable
+private fun TvLandscapeCard(item: CatalogItem, onClick: () -> Unit) {
+    FocusTile(onClick = onClick, modifier = Modifier.width(210.dp).fillMaxHeight()) {
+        Box(Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = item.backdrop ?: item.image,
+                contentDescription = item.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .92f)))
+                )
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+                Text(item.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (item.type == ContentType.LIVE) "Ao vivo" else item.categoryName,
+                    color = VpCyan,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -692,30 +616,29 @@ private fun TvTopNav(
     onRefresh: () -> Unit
 ) {
     Surface(
-        color = Color(0xFF04101F),
-        tonalElevation = 8.dp,
+        color = Color(0xFF04091A).copy(alpha = .98f),
+        tonalElevation = 10.dp,
+        shadowElevation = 14.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BrandWordmark()
-            Spacer(Modifier.width(24.dp))
-            Surface(color = VpPanelAlt, shape = RoundedCornerShape(50)) {
-                Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TvNavChip("Início", section == MainSection.HOME, onHome)
-                    TvNavChip("Ao vivo", section == MainSection.LIVE) { onSection(MainSection.LIVE) }
-                    TvNavChip("Filmes", section == MainSection.MOVIES) { onSection(MainSection.MOVIES) }
-                    TvNavChip("Séries", section == MainSection.SERIES) { onSection(MainSection.SERIES) }
-                    TvNavChip("Favoritos", section == MainSection.FAVORITES) { onSection(MainSection.FAVORITES) }
-                }
+            Spacer(Modifier.width(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TvNavChip("Início", section == MainSection.HOME, onHome)
+                TvNavChip("Ao vivo", section == MainSection.LIVE) { onSection(MainSection.LIVE) }
+                TvNavChip("Filmes", section == MainSection.MOVIES) { onSection(MainSection.MOVIES) }
+                TvNavChip("Séries", section == MainSection.SERIES) { onSection(MainSection.SERIES) }
+                TvNavChip("Favoritos", section == MainSection.FAVORITES) { onSection(MainSection.FAVORITES) }
             }
             Spacer(Modifier.weight(1f))
             TvNavChip("Atualizar", false, onRefresh)
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(5.dp))
             TvNavChip("Ajustes", false, onSettings)
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(5.dp))
             TvNavChip("Suporte", false, onSupport)
         }
     }
@@ -725,20 +648,20 @@ private fun TvTopNav(
 private fun TvNavChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FocusTile(
         onClick = onClick,
-        modifier = Modifier.height(42.dp).widthIn(min = 82.dp, max = 118.dp)
+        modifier = Modifier.height(40.dp).widthIn(min = 78.dp, max = 114.dp)
     ) {
         Box(
             Modifier.fillMaxSize().background(
-                if (selected) Brush.horizontalGradient(listOf(Color(0xFF0C4D72), Color(0xFF12365C)))
+                if (selected) Brush.horizontalGradient(listOf(VpPurple, Color(0xFF4A23C8)))
                 else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
             ),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 label,
-                color = if (selected) Color.White else VpMuted,
+                color = if (selected) Color.White else Color.White.copy(alpha = .72f),
                 fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-                fontSize = 12.sp
+                fontSize = 11.sp
             )
         }
     }
@@ -839,8 +762,8 @@ private fun TvLive(
         epgLoading = false
     }
 
-    Row(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 6.dp)) {
-        Column(Modifier.width(270.dp).fillMaxHeight()) {
+    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(Modifier.width(245.dp).fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Categorias",
@@ -894,7 +817,7 @@ private fun TvLive(
 
         LazyColumn(
             state = channelListState,
-            modifier = Modifier.weight(1.1f).fillMaxHeight(),
+            modifier = Modifier.weight(1.08f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             items(displayItems, key = { it.itemKey }) { item ->
@@ -938,7 +861,7 @@ private fun TvLive(
             previewItem = previewed,
             epg = epg,
             epgLoading = epgLoading,
-            modifier = Modifier.weight(0.95f).fillMaxHeight(),
+            modifier = Modifier.weight(1.02f).fillMaxHeight(),
             onPlay = { selected?.let(onOpen) },
             onFavorite = {
                 selected?.let {
@@ -958,16 +881,36 @@ private fun CategoryButton(
     onClick: () -> Unit
 ) {
     FocusTile(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .86f), Color(0xFF2C185E)))
+                    else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                )
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .background(if (selected) VpCyan else VpBorder, RoundedCornerShape(50))
+            )
+            Spacer(Modifier.width(9.dp))
             Text(
                 name,
-                color = if (selected) VpCyan else Color.White,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = Color.White,
+                fontWeight = if (selected) FontWeight.Black else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Text(count.toString(), color = VpMuted, fontSize = 11.sp)
+            Surface(
+                color = if (selected) Color.White.copy(alpha = .13f) else Color.Black.copy(alpha = .16f),
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(count.toString(), color = if (selected) Color.White else VpMuted, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp))
+            }
         }
     }
 }
@@ -999,8 +942,9 @@ private fun TvLivePreview(
     }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = VpPanel),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF071426)),
         shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .34f)),
         modifier = modifier
     ) {
         Column(Modifier.fillMaxSize().padding(14.dp)) {
