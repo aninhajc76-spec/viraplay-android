@@ -117,7 +117,7 @@ fun TvShell(
 
     Column(
         Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(VpBg, Color(0xFF06152C), VpBg))
+            Brush.verticalGradient(listOf(VpBg, Color(0xFF071A35), Color(0xFF080A25), VpBg))
         )
     ) {
         TvTopNav(section, onSection, { onSection(MainSection.HOME) }, onSupport, onSettings, onRefresh)
@@ -202,7 +202,7 @@ private fun TvHome(
             .fillMaxSize()
             .background(
                 Brush.horizontalGradient(
-                    listOf(Color(0xFF02040B), Color(0xFF07142B), Color(0xFF090722))
+                    listOf(Color(0xFF020714), Color(0xFF071A35), Color(0xFF0B092B))
                 )
             )
     ) {
@@ -211,7 +211,7 @@ private fun TvHome(
             Modifier
                 .width(225.dp)
                 .fillMaxHeight()
-                .background(Color(0xFF05091A).copy(alpha = .96f))
+                .background(Color(0xFF040A1C).copy(alpha = .985f))
                 .padding(horizontal = 18.dp, vertical = 18.dp)
         ) {
             BrandWordmark(large = false)
@@ -308,12 +308,13 @@ private fun TvHome(
                             .fillMaxWidth(.54f)
                     ) {
                         Surface(
-                            color = VpPurple.copy(alpha = .92f),
-                            shape = RoundedCornerShape(50)
+                            color = VpCyan.copy(alpha = .14f),
+                            shape = RoundedCornerShape(50),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .68f))
                         ) {
                             Text(
-                                if (featured?.type == ContentType.LIVE) "AO VIVO" else "DESTAQUE",
-                                color = Color.White,
+                                if (featured?.type == ContentType.LIVE) "AO VIVO" else "DESTAQUE VPLAYO",
+                                color = VpCyan,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Black,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
@@ -410,7 +411,7 @@ private fun TvSideRailButton(
             Modifier
                 .fillMaxSize()
                 .background(
-                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .88f), Color(0xFF2B1A78)))
+                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .96f), Color(0xFF3C25A8), Color(0xFF132B63)))
                     else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                 )
                 .padding(horizontal = 14.dp),
@@ -616,7 +617,7 @@ private fun TvTopNav(
     onRefresh: () -> Unit
 ) {
     Surface(
-        color = Color(0xFF04091A).copy(alpha = .98f),
+        color = Color(0xFF030817).copy(alpha = .995f),
         tonalElevation = 10.dp,
         shadowElevation = 14.dp,
         modifier = Modifier.fillMaxWidth()
@@ -652,7 +653,7 @@ private fun TvNavChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Box(
             Modifier.fillMaxSize().background(
-                if (selected) Brush.horizontalGradient(listOf(VpPurple, Color(0xFF4A23C8)))
+                if (selected) Brush.horizontalGradient(listOf(VpPurple, Color(0xFF4F35E7), Color(0xFF162E67)))
                 else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
             ),
             contentAlignment = Alignment.Center
@@ -885,7 +886,7 @@ private fun CategoryButton(
             Modifier
                 .fillMaxWidth()
                 .background(
-                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .86f), Color(0xFF2C185E)))
+                    if (selected) Brush.horizontalGradient(listOf(VpPurple.copy(alpha = .90f), Color(0xFF33248B), Color(0xFF0D3552)))
                     else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                 )
                 .padding(horizontal = 14.dp, vertical = 11.dp),
@@ -944,7 +945,7 @@ private fun TvLivePreview(
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF071426)),
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VpPurple.copy(alpha = .34f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .34f)),
         modifier = modifier
     ) {
         Column(Modifier.fillMaxSize().padding(14.dp)) {

@@ -1,0 +1,38 @@
+VPlayo 3.3.20 / versionCode 53
+FINAL PREMIUM UNIFICADO - CELULAR + ANDROID TV
+
+FOCO DESTA VERSÃO
+- unificar a identidade visual do celular e da TV;
+- aumentar nitidez, contraste e sensação de acabamento profissional;
+- preservar toda a lógica de reprodução já estabilizada;
+- preparar uma versão adequada para distribuição ampla aos clientes.
+
+CELULAR
+- nova paleta azul-marinho + ciano + roxo igual à TV;
+- topo e barra inferior com acabamento mais premium;
+- hero principal com backdrop do catálogo quando disponível;
+- imagem do destaque mais nítida e overlays cinematográficos;
+- botão principal roxo e ação secundária ciano;
+- cards de navegação com contorno e profundidade;
+- filtros de categorias combinando com a experiência da TV;
+- posters ligeiramente maiores e mais legíveis.
+
+ANDROID TV
+- mantém o layout lateral aprovado;
+- foco do controle mais evidente;
+- contraste e contornos refinados;
+- hero com selo ciano "DESTAQUE VPLAYO";
+- menu lateral e navegação superior com acabamento mais consistente;
+- categorias e painel de prévia com leitura mais clara.
+
+ESTABILIDADE
+- PlayerScreen.kt NÃO foi alterado nesta versão.
+- LivePreview.kt NÃO foi alterado nesta versão.
+- CompatVlcEngine.kt NÃO foi alterado nesta versão.
+- Não altera Supabase, Worker, provedores, ativos ou login.
+- Não precisa SQL.
+- Não precisa publicar Worker.
+
+PUBLICAÇÃO
+versionCode: 53
+versionName: 3.3.20

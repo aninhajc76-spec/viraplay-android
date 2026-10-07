@@ -84,20 +84,20 @@ fun FocusTile(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.025f else 1f,
+        targetValue = if (focused) 1.03f else 1f,
         animationSpec = tween(120),
         label = "vp_focus_scale"
     )
 
     Surface(
-        color = if (focused) Color(0xFF21114B) else Color(0xFF071426),
+        color = if (focused) Color(0xFF151447) else Color(0xFF071629),
         border = BorderStroke(
             if (focused) 2.dp else 1.dp,
-            if (focused) VpPurple else VpBorder.copy(alpha = 0.72f)
+            if (focused) VpCyan else VpBorder.copy(alpha = 0.72f)
         ),
         shape = RoundedCornerShape(20.dp),
         tonalElevation = if (focused) 10.dp else 1.dp,
-        shadowElevation = if (focused) 20.dp else 3.dp,
+        shadowElevation = if (focused) 24.dp else 3.dp,
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
@@ -123,7 +123,7 @@ fun PosterCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.035f else 1f,
+        targetValue = if (focused) 1.04f else 1f,
         animationSpec = tween(110),
         label = "poster_focus_scale"
     )

@@ -63,7 +63,18 @@ fun MobileShell(
                 tonalElevation = 8.dp
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFF020714),
+                                    Color(0xFF071B35),
+                                    Color(0xFF100A2E)
+                                )
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     BrandWordmark()
@@ -86,7 +97,7 @@ fun MobileShell(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = VpPanel, tonalElevation = 10.dp) {
+            NavigationBar(containerColor = Color(0xFF06172C), tonalElevation = 12.dp) {
                 listOf(
                     MainSection.HOME to "Início",
                     MainSection.LIVE to "TV",
@@ -102,7 +113,7 @@ fun MobileShell(
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Color.White,
                             selectedTextColor = VpCyan,
-                            indicatorColor = VpPurple.copy(alpha = 0.28f),
+                            indicatorColor = VpPurple.copy(alpha = 0.42f),
                             unselectedIconColor = VpMuted,
                             unselectedTextColor = VpMuted
                         )
@@ -115,7 +126,7 @@ fun MobileShell(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Brush.verticalGradient(listOf(VpBg, Color(0xFF041126), VpBg)))
+                .background(Brush.verticalGradient(listOf(VpBg, Color(0xFF061A34), Color(0xFF050A20), VpBg)))
         ) {
             when (section) {
                 MainSection.HOME -> MobileHome(db, catalogVersion, accessNotice, adultUnlocked, onOpen, onSection, onSupport, onChanged)
@@ -175,15 +186,15 @@ private fun MobileHome(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(320.dp)
+                    .height(336.dp)
                     .background(Color(0xFF06111F))
             ) {
                 if (!featured?.image.isNullOrBlank()) {
                     AsyncImage(
-                        model = featured?.image,
+                        model = featured?.backdrop ?: featured?.image,
                         contentDescription = featured?.name,
                         contentScale = ContentScale.Crop,
-                        alpha = .48f,
+                        alpha = .72f,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -192,8 +203,8 @@ private fun MobileHome(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
                             listOf(
-                                Color.Black.copy(alpha = .10f),
-                                Color(0xFF02040B).copy(alpha = .45f),
+                                Color.Black.copy(alpha = .06f),
+                                Color(0xFF020714).copy(alpha = .42f),
                                 VpBg
                             )
                         )
@@ -203,7 +214,8 @@ private fun MobileHome(
                     Modifier.fillMaxSize().background(
                         Brush.horizontalGradient(
                             listOf(
-                                Color(0xFF02040B).copy(alpha = .94f),
+                                Color(0xFF020714).copy(alpha = .96f),
+                                Color(0xFF071B35).copy(alpha = .40f),
                                 Color.Transparent
                             )
                         )
@@ -253,17 +265,17 @@ private fun MobileHome(
                                 if (featured != null) onOpen(featured)
                                 else onSection(MainSection.MOVIES)
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(containerColor = VpPurple)
                         ) {
                             Text(
                                 if (featured != null) "▶ Assistir" else "Explorar",
-                                color = Color(0xFF04101D),
+                                color = Color.White,
                                 fontWeight = FontWeight.Black
                             )
                         }
                         OutlinedButton(
                             onClick = { onSection(MainSection.LIVE) },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .32f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, VpCyan.copy(alpha = .62f))
                         ) {
                             Text("TV ao vivo", color = Color.White)
                         }
@@ -352,6 +364,7 @@ private fun HomeQuick(
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = .26f)),
         modifier = modifier
     ) {
         TextButton(
@@ -359,13 +372,13 @@ private fun HomeQuick(
             contentPadding = PaddingValues(0.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(112.dp)
+                .height(118.dp)
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            accent.copy(alpha = .24f),
-                            VpPanelAlt,
-                            VpPanel
+                            accent.copy(alpha = .30f),
+                            Color(0xFF0B2340),
+                            Color(0xFF07162A)
                         )
                     )
                 )
@@ -471,7 +484,7 @@ private fun MobileLibrary(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(sectionTitle(type), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(sectionTitle(type), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
             IconButton(onClick = { searchOpen = !searchOpen }) {
                 Icon(if (searchOpen) Icons.Filled.Close else Icons.Filled.Search, "Pesquisar", tint = VpCyan)
             }
@@ -495,7 +508,19 @@ private fun MobileLibrary(
                         selectedCategory = "ALL"
                         uiStore.setCategory("mobile_${type.name}", "ALL")
                     },
-                    label = { Text("Todos ($totalCount)") }
+                    label = { Text("Todos ($totalCount)") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VpPurple.copy(alpha = .62f),
+                        selectedLabelColor = Color.White,
+                        containerColor = VpPanelAlt.copy(alpha = .78f),
+                        labelColor = VpMuted
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selectedCategory == "ALL",
+                        borderColor = VpBorder,
+                        selectedBorderColor = VpCyan.copy(alpha = .72f)
+                    )
                 )
             }
             items(categories, key = { it.id }) { category ->
@@ -505,7 +530,19 @@ private fun MobileLibrary(
                         selectedCategory = category.id
                         uiStore.setCategory("mobile_${type.name}", category.id)
                     },
-                    label = { Text("${category.name} (${category.count})", maxLines = 1) }
+                    label = { Text("${category.name} (${category.count})", maxLines = 1) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VpPurple.copy(alpha = .62f),
+                        selectedLabelColor = Color.White,
+                        containerColor = VpPanelAlt.copy(alpha = .78f),
+                        labelColor = VpMuted
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selectedCategory == category.id,
+                        borderColor = VpBorder,
+                        selectedBorderColor = VpCyan.copy(alpha = .72f)
+                    )
                 )
             }
         }
@@ -541,7 +578,7 @@ private fun MobileLibrary(
                 items(displayItems, key = { it.itemKey }) { item ->
                     PosterCard(
                         item = item,
-                        width = 140.dp,
+                        width = 148.dp,
                         onClick = { onOpen(item) },
                         onFavorite = { db.toggleFavorite(item.itemKey); onChanged() }
                     )
