@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.viraplay.shared.ContentType
 import com.viraplay.shared.XtreamAccountInfo
 import kotlinx.coroutines.Dispatchers
