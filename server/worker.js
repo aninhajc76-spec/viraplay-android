@@ -28,11 +28,11 @@ async function actor(req, env) {
   const raw = req.headers.get("authorization") || "";
   const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : "";
   if (!token) return null;
-  if (token === env.ADMIN_TOKEN) return { role: "MASTER", id: null, name: "VPlayo MASTER", credits: 0 };
+  if (token === env.ADMIN_TOKEN) return { role: "MASTER", id: null, name: "VPlayo MASTER" };
 
   const rows = await sb(
     env,
-    `viraplay_partners?access_token=eq.${encodeURIComponent(token)}&status=eq.ACTIVE&select=id,name,credits,login_code,status,dns_primary,dns_secondary&limit=1`
+    `viraplay_partners?access_token=eq.${encodeURIComponent(token)}&status=eq.ACTIVE&select=id,name,login_code,status,dns_primary,dns_secondary,active_window_days&limit=1`
   );
   if (!rows?.length) return null;
   return { role: "PARTNER", ...rows[0] };
@@ -63,6 +63,30 @@ async function rpc(env, fn, body) {
   return sb(env, `rpc/${fn}`, { method: "POST", body: JSON.stringify(body) });
 }
 
+function activeStats(rows, windowDays = 10) {
+  const now = Date.now();
+  const oneDay = 24 * 60 * 60 * 1000;
+  const unique = new Map();
+
+  for (const row of rows || []) {
+    const key = String(row.device_id || "");
+    if (!key) continue;
+    const current = unique.get(key);
+    const seen = Date.parse(row.last_seen_at || row.created_at || 0) || 0;
+    if (!current || seen > current.seen) unique.set(key, { ...row, seen });
+  }
+
+  const values = [...unique.values()];
+  const countSince = days => values.filter(x => x.seen >= now - days * oneDay).length;
+
+  return {
+    total_devices: values.length,
+    active_today: countSince(1),
+    active_7d: countSince(7),
+    active_window: countSince(Math.max(1, Number(windowDays || 10)))
+  };
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return json({ ok: true });
@@ -70,7 +94,7 @@ export default {
 
     try {
       if (req.method === "GET" && url.pathname === "/") {
-        return json({ name: "VPlayo API", ok: true, version: "3.3.15" });
+        return json({ name: "VPlayo API", ok: true, version: "3.3.16" });
       }
 
       if (req.method === "POST" && url.pathname === "/api/register") {
@@ -144,43 +168,48 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
       provider_id: rows[0].id,
       device_id: deviceId,
       platform: String(b.platform || "ANDROID").slice(0, 40),
+      app_version: String(b.app_version || "").slice(0, 30) || null,
       last_seen_at: new Date().toISOString()
     })
   });
   return json({ ok: true });
 }
 
-      // Asaas: endpoint reservado. So passa a operar quando as credenciais forem configuradas.
-      if (req.method === "POST" && url.pathname === "/api/payments/asaas/webhook") {
-        if (!env.ASAAS_WEBHOOK_TOKEN) return json({ error: "asaas_not_configured" }, 503);
-        const sent = req.headers.get("asaas-access-token") || "";
-        if (sent !== env.ASAAS_WEBHOOK_TOKEN) return json({ error: "unauthorized" }, 401);
-        const event = await req.json();
-        // A confirmacao automatica de creditos sera ligada quando a conta Asaas
-        // estiver criada e o customer_id de cada parceiro puder ser registrado.
-        return json({ ok: true, received: event?.event || null });
-      }
-
       if (!url.pathname.startsWith("/api/admin/")) return json({ error: "not_found" }, 404);
       const who = await actor(req, env);
       if (!who) return json({ error: "unauthorized" }, 401);
-      const annualCost = Math.max(1, Number(env.ANNUAL_LICENSE_CREDITS || 15));
 
       if (req.method === "GET" && url.pathname === "/api/admin/profile") {
-        let directClients = 0;
-        if (who.role === "PARTNER") {
-          const sessions = await sb(env, `viraplay_provider_sessions?provider_id=eq.${encodeURIComponent(who.id)}&select=device_id`) || [];
-          directClients = new Set(sessions.map(s => s.device_id)).size;
+        if (who.role === "MASTER") {
+          return json({
+            role: who.role,
+            name: who.name,
+            provider_code: null,
+            dns_primary: null,
+            dns_secondary: null,
+            total_devices: 0,
+            active_today: 0,
+            active_7d: 0,
+            active_window: 0,
+            active_window_days: 10
+          });
         }
+
+        const windowDays = Math.min(60, Math.max(1, Number(who.active_window_days || 10)));
+        const sessions = await sb(
+          env,
+          `viraplay_provider_sessions?provider_id=eq.${encodeURIComponent(who.id)}&select=device_id,platform,app_version,created_at,last_seen_at`
+        ) || [];
+        const stats = activeStats(sessions, windowDays);
+
         return json({
           role: who.role,
           name: who.name,
-          credits: Number(who.credits || 0),
-          annual_license_credits: annualCost,
           provider_code: who.login_code || null,
           dns_primary: who.dns_primary || null,
           dns_secondary: who.dns_secondary || null,
-          direct_clients: directClients
+          active_window_days: windowDays,
+          ...stats
         });
       }
 
@@ -232,23 +261,9 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
           return json({ ok: true, device: rows?.[0] || null });
         }
 
-        if (d.partner_id) return json({ error: "device_already_claimed" }, 409);
-        try {
-          const rows = await rpc(env, "viraplay_partner_activate", {
-            p_partner_id: who.id,
-            p_device_id: d.device_id,
-            p_label: b.label || "Cliente",
-            p_playlist_url: b.playlist_url,
-            p_credit_cost: annualCost,
-            p_license_months: Math.max(1, Number(b.license_months || 12))
-          });
-          return json({ ok: true, device: rows?.[0] || null });
-        } catch (e) {
-          const msg = String(e?.message || e);
-          if (msg.includes("insufficient_credits")) return json({ error: "insufficient_credits" }, 402);
-          if (msg.includes("already_claimed")) return json({ error: "device_already_claimed" }, 409);
-          throw e;
-        }
+        // No modelo atual, provedores usam código do provedor + usuário/senha.
+        // A ativação individual por código permanece exclusiva do MASTER.
+        return json({ error: "provider_direct_login_only" }, 403);
       }
 
       if (req.method === "POST" && url.pathname === "/api/admin/update") {
@@ -270,22 +285,47 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
 
       if (req.method === "GET" && url.pathname === "/api/admin/partners") {
         if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);
-        const partners = await sb(env, "viraplay_partners?select=id,name,login_code,access_token,status,credits,dns_primary,dns_secondary&order=created_at.desc") || [];
-        const devices = await sb(env, "viraplay_devices?partner_id=not.is.null&select=partner_id,device_id") || [];
-        const sessions = await sb(env, "viraplay_provider_sessions?select=provider_id,device_id") || [];
-        const deviceSets = {};
-        const directSets = {};
+
+        const partners = await sb(
+          env,
+          "viraplay_partners?select=id,name,login_code,access_token,status,dns_primary,dns_secondary,active_window_days&order=created_at.desc"
+        ) || [];
+        const devices = await sb(
+          env,
+          "viraplay_devices?partner_id=not.is.null&select=partner_id,device_id"
+        ) || [];
+        const sessions = await sb(
+          env,
+          "viraplay_provider_sessions?select=provider_id,device_id,platform,app_version,created_at,last_seen_at"
+        ) || [];
+
+        const legacySets = {};
+        const sessionRows = {};
+
         for (const d of devices) {
-          if (!deviceSets[d.partner_id]) deviceSets[d.partner_id] = new Set();
-          deviceSets[d.partner_id].add(d.device_id);
+          if (!legacySets[d.partner_id]) legacySets[d.partner_id] = new Set();
+          legacySets[d.partner_id].add(d.device_id);
         }
-        for (const d of sessions) {
-          if (!directSets[d.provider_id]) directSets[d.provider_id] = new Set();
-          directSets[d.provider_id].add(d.device_id);
+        for (const s of sessions) {
+          if (!sessionRows[s.provider_id]) sessionRows[s.provider_id] = [];
+          sessionRows[s.provider_id].push(s);
         }
+
         return json(partners.map(p => {
-          const all = new Set([...(deviceSets[p.id] || []), ...(directSets[p.id] || [])]);
-          return { ...p, clients: all.size, direct_clients: (directSets[p.id] || new Set()).size };
+          const windowDays = Math.min(60, Math.max(1, Number(p.active_window_days || 10)));
+          const stats = activeStats(sessionRows[p.id] || [], windowDays);
+          const all = new Set([
+            ...(legacySets[p.id] || []),
+            ...((sessionRows[p.id] || []).map(x => x.device_id))
+          ]);
+
+          return {
+            ...p,
+            active_window_days: windowDays,
+            clients: all.size,
+            direct_clients: stats.total_devices,
+            ...stats
+          };
         }));
       }
 
@@ -298,7 +338,7 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
         const accessToken = randomToken("VPP");
         const rows = await sb(env, "viraplay_partners", {
           method: "POST",
-          body: JSON.stringify({ name, login_code: loginCode, access_token: accessToken, status: "ACTIVE", credits: 0 })
+          body: JSON.stringify({ name, login_code: loginCode, access_token: accessToken, status: "ACTIVE", active_window_days: 10 })
         });
         return json({ ok: true, partner: { ...(rows?.[0] || {}), clients: 0 } });
       }
@@ -309,6 +349,7 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
         const partnerId = String(b.partner_id || "").trim();
         const name = String(b.name || "").trim();
         const status = String(b.status || "ACTIVE").toUpperCase();
+        const activeWindowDays = Math.min(60, Math.max(1, Number(b.active_window_days || 10)));
         if (!partnerId || !name) return json({ error: "missing_fields" }, 400);
         if (!["ACTIVE", "BLOCKED"].includes(status)) return json({ error: "invalid_status" }, 400);
 
@@ -320,6 +361,7 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
             body: JSON.stringify({
               name,
               status,
+              active_window_days: activeWindowDays,
               updated_at: new Date().toISOString()
             })
           }
@@ -362,6 +404,34 @@ if (req.method === "POST" && url.pathname === "/api/provider/session") {
       }
 
 
+if (req.method === "GET" && url.pathname === "/api/admin/provider/sessions") {
+  let targetId = who.id;
+  let windowDays = Number(who.active_window_days || 10);
+
+  if (who.role === "MASTER") {
+    targetId = String(url.searchParams.get("partner_id") || "").trim();
+    if (!targetId) return json({ error: "missing_partner_id" }, 400);
+
+    const providerRows = await sb(
+      env,
+      `viraplay_partners?id=eq.${encodeURIComponent(targetId)}&select=active_window_days&limit=1`
+    ) || [];
+    if (!providerRows.length) return json({ error: "provider_not_found" }, 404);
+    windowDays = Number(providerRows[0].active_window_days || 10);
+  }
+
+  const rows = await sb(
+    env,
+    `viraplay_provider_sessions?provider_id=eq.${encodeURIComponent(targetId)}&select=device_id,platform,app_version,created_at,last_seen_at&order=last_seen_at.desc&limit=1000`
+  ) || [];
+
+  return json({
+    active_window_days: Math.min(60, Math.max(1, windowDays)),
+    stats: activeStats(rows, windowDays),
+    sessions: rows
+  });
+}
+
 if (req.method === "POST" && url.pathname === "/api/admin/provider/config") {
   const b = await req.json();
   let targetId = who.id;
@@ -395,35 +465,6 @@ if (req.method === "POST" && url.pathname === "/api/admin/provider/config") {
   if (!rows?.length) return json({ error: "provider_not_found" }, 404);
   return json({ ok: true, provider: rows[0] });
 }
-
-      if (req.method === "POST" && url.pathname === "/api/admin/partners/credits") {
-        if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);
-        const b = await req.json();
-        const amount = Number(b.amount || 0);
-        if (!b.partner_id || !Number.isInteger(amount) || amount === 0) return json({ error: "invalid_amount" }, 400);
-        const balance = await rpc(env, "viraplay_add_credits", {
-          p_partner_id: b.partner_id,
-          p_amount: amount,
-          p_kind: "MASTER_ADJUSTMENT",
-          p_note: b.note || "Ajuste manual MASTER",
-          p_reference: null
-        });
-        return json({ ok: true, balance });
-      }
-
-      if (req.method === "GET" && url.pathname === "/api/admin/credits/history") {
-        if (who.role === "MASTER") return json([]);
-        const rows = await sb(env,
-          `viraplay_credit_ledger?partner_id=eq.${encodeURIComponent(who.id)}&select=amount,kind,note,created_at&order=created_at.desc&limit=100`
-        );
-        return json(rows || []);
-      }
-
-      if (req.method === "POST" && url.pathname === "/api/admin/credits/order") {
-        if (who.role !== "PARTNER") return json({ error: "forbidden" }, 403);
-        if (!env.ASAAS_API_KEY) return json({ error: "asaas_not_configured", ready: false }, 503);
-        return json({ error: "asaas_customer_setup_required", ready: false }, 503);
-      }
 
       return json({ error: "not_found" }, 404);
     } catch (e) {

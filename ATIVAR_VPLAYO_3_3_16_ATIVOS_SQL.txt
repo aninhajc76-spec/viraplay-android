@@ -1,0 +1,29 @@
+-- VPlayo 3.3.16 - MODELO POR APARELHO ATIVO
+-- Execute UMA VEZ no SQL Editor do Supabase.
+-- Migração aditiva: não apaga clientes, provedores nem configurações existentes.
+
+alter table public.viraplay_partners
+  add column if not exists active_window_days integer not null default 10;
+
+alter table public.viraplay_provider_sessions
+  add column if not exists app_version text;
+
+-- Mantém a regra de atividade entre 1 e 60 dias.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'viraplay_partners_active_window_days_check'
+  ) then
+    alter table public.viraplay_partners
+      add constraint viraplay_partners_active_window_days_check
+      check (active_window_days between 1 and 60);
+  end if;
+end $$;
+
+create index if not exists viraplay_provider_sessions_last_seen_idx
+  on public.viraplay_provider_sessions(last_seen_at desc);
+
+-- As tabelas/colunas antigas de créditos são preservadas somente por compatibilidade
+-- com versões anteriores. A versão 3.3.16 não usa créditos no modelo comercial.

@@ -1,0 +1,30 @@
+VPlayo 3.3.16 / versionCode 49
+ATIVOS + PROVEDORES + ADM PREMIUM
+
+INCLUÍDO NESTA VERSÃO
+- modelo comercial por APARELHO ATIVO; créditos foram retirados da interface e do fluxo novo;
+- cada provedor continua com código próprio + chave ADM;
+- DNS principal e secundário configurados pelo próprio provedor no ADM;
+- cliente entra com código do provedor + usuário + senha;
+- senha IPTV não é enviada para o backend VPlayo;
+- aparelho envia apenas sinal de atividade, no máximo uma vez por dia;
+- MASTER define por provedor quantos dias sem atividade deixam o aparelho fora da contagem (padrão: 10);
+- painel do provedor mostra Total, 24h, 7 dias e ativos na janela comercial;
+- painel MASTER mostra a mesma contagem em cada card de provedor;
+- área de créditos removida da navegação e da parceria;
+- design do VPlayo ADM melhorado: cards com ícones, navegação inferior com ícones e visual premium;
+- tela "Escolha como entrar" melhorada com ícones, campos visuais e mostrar/ocultar senha;
+- continuam disponíveis: Provedor, DNS direto, M3U/Xtream e Código do aparelho;
+- mantém todo o pacote anterior: áudio COMPAT, fallback de vídeo, EPG/prévia, TV, favoritos, histórico, PIN etc.;
+- correção do atualizador do ADM incluída (FileProvider + permissão de instalação);
+- layout largo/emulador já segue o modo TV da 3.3.15.
+
+OBSERVAÇÃO DE BANCO
+As tabelas antigas de créditos não são apagadas para evitar migração destrutiva e preservar compatibilidade.
+A versão 3.3.16 não exibe nem usa créditos no novo modelo de parceria.
+
+PUBLICAÇÃO
+1. Execute ATIVAR_VPLAYO_3_3_16_ATIVOS_SQL.txt no Supabase.
+2. Importe este ZIP.
+3. Publique o Worker.
+4. Publique a atualização VPlayo com versionCode 49 / versionName 3.3.16.

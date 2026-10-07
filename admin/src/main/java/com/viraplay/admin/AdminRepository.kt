@@ -20,13 +20,15 @@ class AdminRepository {
             val o = JSONObject(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/profile", auth(token)))
             AdminProfile(
                 role = o.optString("role", "PARTNER"),
-                name = o.optString("name", "Parceiro"),
-                credits = o.optInt("credits", 0),
-                annualLicenseCredits = o.optInt("annual_license_credits", 15),
+                name = o.optString("name", "Provedor"),
                 providerCode = o.optString("provider_code").takeIf { it.isNotBlank() && it != "null" },
                 dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
                 dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
-                directClients = o.optInt("direct_clients", 0)
+                totalDevices = o.optInt("total_devices", 0),
+                activeToday = o.optInt("active_today", 0),
+                active7d = o.optInt("active_7d", 0),
+                activeWindow = o.optInt("active_window", 0),
+                activeWindowDays = o.optInt("active_window_days", 10).coerceIn(1, 60)
             )
         } catch (e: Throwable) {
             val message = e.message.orEmpty()
@@ -39,9 +41,7 @@ class AdminRepository {
             )
             AdminProfile(
                 role = "MASTER",
-                name = "VPlayo MASTER",
-                credits = 0,
-                annualLicenseCredits = 0
+                name = "VPlayo MASTER"
             )
         }
     }
@@ -160,11 +160,15 @@ class AdminRepository {
                 loginCode = o.optString("login_code"),
                 accessToken = o.optString("access_token"),
                 status = o.optString("status", "ACTIVE"),
-                credits = o.optInt("credits", 0),
                 clients = o.optInt("clients", 0),
                 dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
                 dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
-                directClients = o.optInt("direct_clients", 0)
+                directClients = o.optInt("direct_clients", 0),
+                totalDevices = o.optInt("total_devices", o.optInt("direct_clients", 0)),
+                activeToday = o.optInt("active_today", 0),
+                active7d = o.optInt("active_7d", 0),
+                activeWindow = o.optInt("active_window", 0),
+                activeWindowDays = o.optInt("active_window_days", 10).coerceIn(1, 60)
             )
         }
     }
@@ -178,26 +182,37 @@ class AdminRepository {
             )
         ).getJSONObject("partner")
         return PartnerInfo(
-            id = o.optString("id"),
-            name = o.optString("name"),
-            loginCode = o.optString("login_code"),
-            accessToken = o.optString("access_token"),
-            status = o.optString("status", "ACTIVE"),
-            credits = o.optInt("credits", 0),
-            clients = o.optInt("clients", 0),
-            dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
-            dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
-            directClients = o.optInt("direct_clients", 0)
-        )
+                id = o.optString("id"),
+                name = o.optString("name"),
+                loginCode = o.optString("login_code"),
+                accessToken = o.optString("access_token"),
+                status = o.optString("status", "ACTIVE"),
+                clients = o.optInt("clients", 0),
+                dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
+                dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
+                directClients = o.optInt("direct_clients", 0),
+                totalDevices = o.optInt("total_devices", o.optInt("direct_clients", 0)),
+                activeToday = o.optInt("active_today", 0),
+                active7d = o.optInt("active_7d", 0),
+                activeWindow = o.optInt("active_window", 0),
+                activeWindowDays = o.optInt("active_window_days", 10).coerceIn(1, 60)
+            )
     }
 
-    fun updatePartner(token: String, partnerId: String, name: String, status: String) {
+    fun updatePartner(
+        token: String,
+        partnerId: String,
+        name: String,
+        status: String,
+        activeWindowDays: Int
+    ) {
         Http.postJson(
             "${AppConfig.SERVER_BASE_URL}/api/admin/partners/update",
             JSONObject()
                 .put("partner_id", partnerId)
                 .put("name", name.trim())
-                .put("status", status),
+                .put("status", status)
+                .put("active_window_days", activeWindowDays.coerceIn(1, 60)),
             auth(token)
         )
     }
@@ -221,29 +236,5 @@ class AdminRepository {
             .put("dns_secondary", dnsSecondary?.trim()?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
         partnerId?.let { body.put("partner_id", it) }
         Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/provider/config", body, auth(token))
-    }
-
-    fun grantCredits(token: String, partnerId: String, amount: Int, note: String? = null) {
-        Http.postJson(
-            "${AppConfig.SERVER_BASE_URL}/api/admin/partners/credits",
-            JSONObject()
-                .put("partner_id", partnerId)
-                .put("amount", amount)
-                .put("note", note ?: "Crédito manual MASTER"),
-            auth(token)
-        )
-    }
-
-    fun creditHistory(token: String): List<CreditEntry> {
-        val arr = JSONArray(Http.getText("${AppConfig.SERVER_BASE_URL}/api/admin/credits/history", auth(token), maxChars = 600_000))
-        return (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
-            CreditEntry(
-                amount = o.optInt("amount", 0),
-                kind = o.optString("kind"),
-                note = o.optString("note").takeIf { it.isNotBlank() && it != "null" },
-                createdAt = o.optString("created_at").takeIf { it.isNotBlank() && it != "null" }
-            )
-        }
     }
 }

@@ -183,6 +183,7 @@ object ProviderAccessClient {
                     .put("provider_code", code.trim().uppercase())
                     .put("device_id", deviceId)
                     .put("platform", platform)
+                    .put("app_version", BuildConfig.VERSION_NAME)
             )
         }
     }

@@ -22,10 +22,7 @@ data class AdminUpdateInfo(
     val sha256: String?
 )
 
-enum class AdminInstallLaunchResult {
-    STARTED,
-    NEED_PERMISSION
-}
+enum class AdminInstallLaunchResult { STARTED, NEED_PERMISSION }
 
 class AdminUpdateManager(private val context: Context) {
     companion object {
@@ -34,48 +31,40 @@ class AdminUpdateManager(private val context: Context) {
     }
 
     fun check(): AdminUpdateInfo? {
-        val text = getText(MANIFEST_URL)
-        val root = JSONObject(text)
-
+        val root = JSONObject(getText(MANIFEST_URL))
         val versionCode = root.optInt("adminVersionCode", 0)
         val url = root.optString("adminUrl", "").trim()
         if (versionCode <= BuildConfig.VERSION_CODE || url.isBlank()) return null
-
         return AdminUpdateInfo(
-            versionCode = versionCode,
-            versionName = root.optString("adminVersionName", versionCode.toString()),
-            message = root.optString(
-                "adminMessage",
-                root.optString("message", "Nova atualização do ViraPlay ADM disponível.")
-            ),
-            mandatory = root.optBoolean("adminMandatory", root.optBoolean("mandatory", false)),
-            url = url,
-            sha256 = root.optString("adminSha256", "").trim().ifBlank { null }
+            versionCode,
+            root.optString("adminVersionName", versionCode.toString()),
+            root.optString("adminMessage", root.optString("message", "Nova atualização do VPlayo ADM disponível.")),
+            root.optBoolean("adminMandatory", root.optBoolean("mandatory", false)),
+            url,
+            root.optString("adminSha256", "").trim().ifBlank { null }
         )
     }
 
     fun download(info: AdminUpdateInfo): File {
-        val targetDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
-        val target = File(targetDir, "ViraPlay-ADM-${info.versionName}.apk")
-        val temp = File(targetDir, "ViraPlay-ADM-${info.versionName}.part")
-
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
+        val target = File(dir, "ViraPlay-ADM-${info.versionName}.apk")
+        val temp = File(dir, "ViraPlay-ADM-${info.versionName}.part")
         if (temp.exists()) temp.delete()
 
-        val connection = URL(info.url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 12_000
-        connection.readTimeout = 30_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", "ViraPlay-ADM/${BuildConfig.VERSION_NAME}")
-        connection.connect()
-
-        if (connection.responseCode !in 200..299) {
-            val code = connection.responseCode
-            connection.disconnect()
+        val c = URL(info.url).openConnection() as HttpURLConnection
+        c.connectTimeout = 12_000
+        c.readTimeout = 30_000
+        c.instanceFollowRedirects = true
+        c.setRequestProperty("User-Agent", "ViraPlay-ADM/${BuildConfig.VERSION_NAME}")
+        c.connect()
+        if (c.responseCode !in 200..299) {
+            val code = c.responseCode
+            c.disconnect()
             throw IllegalStateException("Falha ao baixar atualização: HTTP $code")
         }
 
         val digest = MessageDigest.getInstance("SHA-256")
-        connection.inputStream.use { input ->
+        c.inputStream.use { input ->
             temp.outputStream().buffered(64 * 1024).use { output ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
@@ -86,13 +75,13 @@ class AdminUpdateManager(private val context: Context) {
                 }
             }
         }
-        connection.disconnect()
+        c.disconnect()
 
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         info.sha256?.let { expected ->
-            if (!actual.equals(expected, ignoreCase = true)) {
+            if (!actual.equals(expected, true)) {
                 temp.delete()
-                throw IllegalStateException("Arquivo de atualização inválido. Tente novamente.")
+                throw IllegalStateException("Arquivo de atualização inválido.")
             }
         }
 
@@ -101,53 +90,47 @@ class AdminUpdateManager(private val context: Context) {
             temp.copyTo(target, overwrite = true)
             temp.delete()
         }
-
         return target
     }
 
     fun launchInstaller(apk: File): AdminInstallLaunchResult {
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
-            val settings = Intent(
-                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                Uri.parse("package:${context.packageName}")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(settings)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()) {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
             return AdminInstallLaunchResult.NEED_PERMISSION
         }
 
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apk
-        )
-
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW)
             .setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+        if (intent.resolveActivity(context.packageManager) == null) {
+            throw IllegalStateException("Nenhum instalador de APK disponível neste aparelho.")
+        }
         context.startActivity(intent)
         return AdminInstallLaunchResult.STARTED
     }
 
     private fun getText(url: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 5_000
-        connection.readTimeout = 8_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", "ViraPlay-ADM/${BuildConfig.VERSION_NAME}")
-        connection.connect()
-
-        if (connection.responseCode !in 200..299) {
-            val code = connection.responseCode
-            connection.disconnect()
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 5_000
+        c.readTimeout = 8_000
+        c.instanceFollowRedirects = true
+        c.setRequestProperty("User-Agent", "ViraPlay-ADM/${BuildConfig.VERSION_NAME}")
+        c.connect()
+        if (c.responseCode !in 200..299) {
+            val code = c.responseCode
+            c.disconnect()
             throw IllegalStateException("Falha ao verificar atualização: HTTP $code")
         }
-
-        return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            .also { connection.disconnect() }
+        return c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            .also { c.disconnect() }
     }
 }

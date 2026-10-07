@@ -13,6 +13,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +55,7 @@ private val Danger = Color(0xFFFF5E78)
 private val Muted = Color(0xFF98A3B8)
 
 private enum class Tab(val label: String) {
-    DASHBOARD("Painel"), ACTIVATE("Ativar"), CLIENTS("Clientes"), PARTNERS("Provedores"), PROVIDER("Servidor"), CREDITS("Créditos"), UPDATES("Atualizações")
+    DASHBOARD("Painel"), ACTIVATE("Ativar"), CLIENTS("Clientes"), PARTNERS("Provedores"), PROVIDER("Servidor"), UPDATES("Atualizações")
 }
 
 @Composable
@@ -131,13 +143,11 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     var profile by remember { mutableStateOf<AdminProfile?>(null) }
     var devices by remember { mutableStateOf<List<AdminDevice>>(emptyList()) }
     var partners by remember { mutableStateOf<List<PartnerInfo>>(emptyList()) }
-    var credits by remember { mutableStateOf<List<CreditEntry>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
     var status by remember { mutableStateOf("Conectando...") }
     var firstLoad by remember { mutableStateOf(true) }
     var selectedClient by remember { mutableStateOf<AdminDevice?>(null) }
     var newPartnerDialog by remember { mutableStateOf(false) }
-    var grantPartner by remember { mutableStateOf<PartnerInfo?>(null) }
     var editPartner by remember { mutableStateOf<PartnerInfo?>(null) }
     var deletePartner by remember { mutableStateOf<PartnerInfo?>(null) }
     var partnerBackendReady by remember { mutableStateOf(true) }
@@ -158,14 +168,12 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
             devices = ds
 
             if (p.isMaster) {
-                credits = emptyList()
                 val partnerResult = withContext(Dispatchers.IO) { runCatching { repo.partners(token) } }
                 partners = partnerResult.getOrDefault(emptyList())
                 partnerBackendReady = partnerResult.isSuccess
             } else {
                 partners = emptyList()
                 partnerBackendReady = true
-                credits = withContext(Dispatchers.IO) { repo.creditHistory(token) }
             }
 
             status = "${ds.size} cliente(s)"
@@ -191,7 +199,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
         if (currentProfile?.isMaster == true) {
             listOf(Tab.DASHBOARD, Tab.ACTIVATE, Tab.CLIENTS, Tab.PARTNERS, Tab.UPDATES)
         } else {
-            listOf(Tab.DASHBOARD, Tab.PROVIDER, Tab.ACTIVATE, Tab.CLIENTS, Tab.CREDITS, Tab.UPDATES)
+            listOf(Tab.DASHBOARD, Tab.PROVIDER, Tab.UPDATES)
         }
     }
     if (tab !in tabs) tab = Tab.DASHBOARD
@@ -213,7 +221,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(currentProfile?.name ?: status, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            if (currentProfile?.isMaster == false) "${currentProfile.credits} créditos" else status,
+                            if (currentProfile?.isMaster == false) "${currentProfile.activeWindow} ativos / ${currentProfile.activeWindowDays} dias" else status,
                             color = if (currentProfile?.isMaster == false) Cyan else Muted,
                             fontSize = 10.sp
                         )
@@ -224,14 +232,36 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = Panel) {
-                tabs.forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = { Text(navGlyph(item), fontSize = 10.sp, fontWeight = FontWeight.Black) },
-                        label = { Text(item.label, fontSize = 9.sp) }
-                    )
+            Surface(
+                color = Color(0xFF061B36),
+                tonalElevation = 8.dp,
+                shadowElevation = 10.dp
+            ) {
+                NavigationBar(
+                    containerColor = Color.Transparent,
+                    tonalElevation = 0.dp
+                ) {
+                    tabs.forEach { item ->
+                        NavigationBarItem(
+                            selected = tab == item,
+                            onClick = { tab = item },
+                            icon = {
+                                Icon(
+                                    imageVector = navIcon(item),
+                                    contentDescription = item.label,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            },
+                            label = { Text(item.label, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Cyan,
+                                selectedTextColor = Cyan,
+                                indicatorColor = Purple.copy(alpha = .26f),
+                                unselectedIconColor = Color.White.copy(alpha = .70f),
+                                unselectedTextColor = Color.White.copy(alpha = .68f)
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -250,7 +280,6 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     partners = partners,
                     backendReady = partnerBackendReady,
                     onNew = { newPartnerDialog = true },
-                    onGrant = { grantPartner = it },
                     onEdit = { editPartner = it },
                     onDelete = { deletePartner = it }
                 )
@@ -260,7 +289,6 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     repo = repo,
                     onSaved = { reload() }
                 )
-                Tab.CREDITS -> CreditsTab(currentProfile, credits)
                 Tab.UPDATES -> UpdatesTab(
                     info = updateInfo,
                     checking = checkingUpdate,
@@ -282,10 +310,17 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                             val result = withContext(Dispatchers.IO) { runCatching { updateManager.download(info) } }
                             result.onSuccess { apk ->
                                 updateBusy = false
-                                when (updateManager.launchInstaller(apk)) {
-                                    AdminInstallLaunchResult.STARTED -> Unit
-                                    AdminInstallLaunchResult.NEED_PERMISSION -> updateError = "Autorize a instalação e tente novamente."
-                                }
+                                runCatching { updateManager.launchInstaller(apk) }
+                                    .onSuccess { launch ->
+                                        when (launch) {
+                                            AdminInstallLaunchResult.STARTED -> Unit
+                                            AdminInstallLaunchResult.NEED_PERMISSION ->
+                                                updateError = "Autorize a instalação de apps desta fonte e toque novamente."
+                                        }
+                                    }
+                                    .onFailure { e ->
+                                        updateError = e.message ?: "Não foi possível abrir o instalador."
+                                    }
                             }.onFailure {
                                 updateBusy = false
                                 updateError = it.message ?: "Falha ao baixar atualização"
@@ -312,12 +347,6 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
         })
     }
 
-    grantPartner?.let { partner ->
-        GrantCreditsDialog(partner, token, repo, onDismiss = { grantPartner = null }, onSaved = {
-            grantPartner = null
-            reload()
-        })
-    }
 
     editPartner?.let { partner ->
         EditPartnerDialog(
@@ -346,57 +375,116 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     }
 }
 
-private fun navGlyph(tab: Tab): String = when (tab) {
-    Tab.DASHBOARD -> "ADM"
-    Tab.ACTIVATE -> "+"
-    Tab.CLIENTS -> "CL"
-    Tab.PARTNERS -> "PV"
-    Tab.PROVIDER -> "DNS"
-    Tab.CREDITS -> "CR"
-    Tab.UPDATES -> "UPD"
+private fun navIcon(tab: Tab): ImageVector = when (tab) {
+    Tab.DASHBOARD -> Icons.Filled.Home
+    Tab.ACTIVATE -> Icons.Filled.AddCircle
+    Tab.CLIENTS -> Icons.Filled.People
+    Tab.PARTNERS -> Icons.Filled.Dns
+    Tab.PROVIDER -> Icons.Filled.Settings
+    Tab.UPDATES -> Icons.Filled.SystemUpdateAlt
 }
 
 @Composable
-private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, partnerCount: Int, go: (Tab) -> Unit) {
+private fun DashboardTab(
+    profile: AdminProfile?,
+    devices: List<AdminDevice>,
+    partnerCount: Int,
+    go: (Tab) -> Unit
+) {
     val clients = devices.filter { !it.playlistUrl.isNullOrBlank() }
     val active = clients.count { it.enabled }
     val blocked = clients.size - active
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val isMaster = profile?.isMaster != false
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         item {
             Text(
-                when {
-                    profile == null -> "Carregando painel..."
-                    profile.isMaster -> "Painel MASTER"
-                    else -> "Painel do provedor"
-                },
+                if (isMaster) "Painel MASTER" else "Painel do provedor",
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp
+                fontWeight = FontWeight.Black,
+                fontSize = 30.sp
             )
-            Text("VPlayo Android + Android TV", color = Muted, fontSize = 12.sp)
+            Text(
+                if (isMaster) "VPlayo Android + Android TV"
+                else "Atividade do aplicativo em tempo real",
+                color = Muted,
+                fontSize = 12.sp
+            )
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("Clientes", clients.size, Cyan, Modifier.weight(1f))
-                Metric("Ativos", active, Green, Modifier.weight(1f))
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("Bloqueados", blocked, Danger, Modifier.weight(1f))
-                Metric(if (profile?.isMaster == true) "Provedores" else "Créditos", if (profile?.isMaster == true) partnerCount else profile?.credits ?: 0, Purple, Modifier.weight(1f))
-            }
-        }
-        item {
-            Button(onClick = { go(Tab.ACTIVATE) }, modifier = Modifier.fillMaxWidth()) { Text("Ativar aparelho por código") }
-        }
-        if (profile?.isMaster == false) {
+
+        if (isMaster) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(15.dp)) {
-                        Text("Licença anual", color = Cyan, fontWeight = FontWeight.Bold)
-                        Text("Ativações individuais continuam disponíveis. O login por provedor usa o código + DNS configurado na aba Servidor.", color = Muted, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric("Clientes", clients.size, Cyan, Icons.Filled.People, Modifier.weight(1f))
+                    Metric("Ativos", active, Green, Icons.Filled.CheckCircle, Modifier.weight(1f))
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric("Bloqueados", blocked, Danger, Icons.Filled.Block, Modifier.weight(1f))
+                    Metric("Provedores", partnerCount, Purple, Icons.Filled.Dns, Modifier.weight(1f))
+                }
+            }
+            item {
+                Button(
+                    onClick = { go(Tab.ACTIVATE) },
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Icon(Icons.Filled.AddCircle, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Ativar aparelho por código", fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric("Total", profile?.totalDevices ?: 0, Cyan, Icons.Filled.People, Modifier.weight(1f))
+                    Metric("24 horas", profile?.activeToday ?: 0, Green, Icons.Filled.CheckCircle, Modifier.weight(1f))
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric("7 dias", profile?.active7d ?: 0, Purple, Icons.Filled.Tune, Modifier.weight(1f))
+                    Metric(
+                        "${profile?.activeWindowDays ?: 10} dias",
+                        profile?.activeWindow ?: 0,
+                        Cyan,
+                        Icons.Filled.Dns,
+                        Modifier.weight(1f)
+                    )
+                }
+            }
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)),
+                    border = BorderStroke(1.dp, Cyan.copy(alpha = .20f)),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Modelo por aparelho ativo", color = Cyan, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Um aparelho conta como ativo enquanto tiver atividade dentro da janela de ${profile?.activeWindowDays ?: 10} dias definida pelo MASTER.",
+                            color = Muted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
+                }
+            }
+            item {
+                Button(
+                    onClick = { go(Tab.PROVIDER) },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Icon(Icons.Filled.Settings, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Configurar servidor / DNS", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -404,20 +492,51 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
 }
 
 @Composable
-private fun Metric(label: String, value: Int, color: Color, modifier: Modifier) {
+private fun Metric(
+    label: String,
+    value: Int,
+    color: Color,
+    icon: ImageVector,
+    modifier: Modifier
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = BorderStroke(1.dp, color.copy(alpha = .20f)),
-        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = .28f)),
+        shape = RoundedCornerShape(22.dp),
         modifier = modifier
     ) {
-        Column(
-            Modifier.fillMaxWidth().background(
-                Brush.linearGradient(listOf(color.copy(alpha = .12f), Panel, PanelAlt.copy(alpha = .72f)))
-            ).padding(17.dp)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            color.copy(alpha = .16f),
+                            Color(0xFF071A34),
+                            Color(0xFF0B1933)
+                        )
+                    )
+                )
+                .padding(17.dp)
         ) {
-            Text(value.toString(), color = color, fontSize = 31.sp, fontWeight = FontWeight.Black)
-            Text(label.uppercase(), color = Color.White.copy(alpha = .74f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Column {
+                Surface(
+                    color = color.copy(alpha = .16f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(value.toString(), color = color, fontSize = 32.sp, fontWeight = FontWeight.Black)
+                Text(
+                    label.uppercase(),
+                    color = Color.White.copy(alpha = .78f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -467,11 +586,12 @@ private fun ActivateByCodeTab(token: String, repo: AdminRepository, profile: Adm
                         OutlinedTextField(value = identifier, onValueChange = { identifier = it }, label = { Text("Identificação (opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                         OutlinedTextField(value = playlist, onValueChange = { playlist = it }, label = { Text("Lista M3U / URL") }, minLines = 3, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                         OutlinedTextField(value = expiry, onValueChange = { expiry = it }, label = { Text("Vencimento da lista (DD/MM/AAAA, opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                        if (profile?.isMaster == false) {
-                            Text("Custo: ${profile.annualLicenseCredits} créditos • licença VPlayo por 12 meses", color = Purple, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
-                        } else {
-                            Text("Cliente MASTER • sem consumo de créditos", color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
-                        }
+                        Text(
+                            "Ativação individual do MASTER",
+                            color = Green,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
                         Button(
                             onClick = {
                                 if (name.isBlank() || playlist.isBlank()) { error = "Preencha nome e lista."; return@Button }
@@ -486,7 +606,6 @@ private fun ActivateByCodeTab(token: String, repo: AdminRepository, profile: Adm
                                         onActivated()
                                     } catch (e: Throwable) {
                                         error = when {
-                                            (e.message ?: "").contains("insufficient_credits") -> "Créditos insuficientes para esta ativação."
                                             (e.message ?: "").contains("409") -> "Este aparelho já foi vinculado a outro parceiro."
                                             else -> "Não foi possível ativar: ${(e.message ?: "erro").take(80)}"
                                         }
@@ -555,80 +674,127 @@ private fun PartnersTab(
     partners: List<PartnerInfo>,
     backendReady: Boolean,
     onNew: () -> Unit,
-    onGrant: (PartnerInfo) -> Unit,
     onEdit: (PartnerInfo) -> Unit,
     onDelete: (PartnerInfo) -> Unit
 ) {
     val context = LocalContext.current
 
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
-            Text("Provedores", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("Área exclusiva do MASTER. Crie o provedor, entregue a chave ADM e acompanhe a configuração de DNS.", color = Muted, fontSize = 12.sp)
+            Text("Provedores", color = Color.White, fontWeight = FontWeight.Black, fontSize = 28.sp)
+            Text(
+                "Crie acessos, acompanhe aparelhos ativos e defina a janela usada na parceria.",
+                color = Muted,
+                fontSize = 12.sp
+            )
 
             if (!backendReady) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)),
+                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = .08f)),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("Configuração de provedores pendente", color = Cyan, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Publique o Worker atualizado para liberar o gerenciamento de provedores.",
-                            color = Muted,
-                            fontSize = 11.sp
-                        )
-                    }
+                    Text(
+                        "Publique o Worker atualizado para liberar o gerenciamento de provedores.",
+                        color = Danger,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(14.dp)
+                    )
                 }
             }
 
             Button(
                 onClick = onNew,
                 enabled = backendReady,
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-            ) { Text("Cadastrar provedor") }
+                modifier = Modifier.fillMaxWidth().height(54.dp).padding(top = 10.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Filled.AddCircle, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Cadastrar provedor", fontWeight = FontWeight.Bold)
+            }
         }
 
         if (partners.isEmpty()) item { EmptyCard("Nenhum provedor cadastrado.") }
 
         items(partners, key = { it.id }) { p ->
             Card(
-                colors = CardDefaults.cardColors(containerColor = Panel),
-                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                border = BorderStroke(
+                    1.dp,
+                    if (p.status.equals("ACTIVE", true)) Cyan.copy(alpha = .24f) else Danger.copy(alpha = .28f)
+                ),
+                shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(15.dp)) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    Color(0xFF071A34),
+                                    Color(0xFF0A1D3A),
+                                    Purple.copy(alpha = .08f)
+                                )
+                            )
+                        )
+                        .padding(16.dp)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = Purple.copy(alpha = .16f),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Dns, null, tint = Purple)
+                            }
+                        }
+                        Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             Text(
-                                "${if (p.status.equals("ACTIVE", true)) "ATIVO" else "BLOQUEADO"} • ${p.clients} cliente(s)",
+                                if (p.status.equals("ACTIVE", true)) "PROVEDOR ATIVO" else "PROVEDOR BLOQUEADO",
                                 color = if (p.status.equals("ACTIVE", true)) Green else Danger,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black
                             )
                         }
-                        Text("${p.credits} CR", color = Cyan, fontWeight = FontWeight.Black)
+                        StatusPill(p.status.equals("ACTIVE", true))
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ProviderMiniMetric("TOTAL", p.totalDevices, Cyan, Modifier.weight(1f))
+                        ProviderMiniMetric("24H", p.activeToday, Green, Modifier.weight(1f))
+                        ProviderMiniMetric("${p.activeWindowDays}D", p.activeWindow, Purple, Modifier.weight(1f))
+                    }
+
+                    Spacer(Modifier.height(10.dp))
                     Surface(
                         color = if (p.dnsConfigured) Green.copy(alpha = .10f) else Danger.copy(alpha = .10f),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, if (p.dnsConfigured) Green.copy(alpha = .22f) else Danger.copy(alpha = .22f))
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (p.dnsConfigured) Green.copy(alpha = .22f) else Danger.copy(alpha = .22f)
+                        )
                     ) {
                         Text(
-                            if (p.dnsConfigured) "DNS configurado • ${p.directClients} acesso(s) por login" else "DNS ainda não configurado",
+                            if (p.dnsConfigured) "DNS configurado • secundário ${if (p.dnsSecondary.isNullOrBlank()) "não definido" else "pronto"}"
+                            else "DNS ainda não configurado",
                             color = if (p.dnsConfigured) Green else Danger,
                             fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+
+                    Spacer(Modifier.height(10.dp))
                     Text("Código do provedor", color = Muted, fontSize = 9.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(p.loginCode, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(p.loginCode, color = Cyan, fontSize = 15.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
                         TextButton(onClick = { copyPartnerText(context, "Código do provedor", p.loginCode) }) {
                             Text("Copiar")
                         }
@@ -638,9 +804,9 @@ private fun PartnersTab(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             p.accessToken,
-                            color = Purple,
+                            color = Color.White.copy(alpha = .82f),
                             fontSize = 10.sp,
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
@@ -649,26 +815,39 @@ private fun PartnersTab(
                         }
                     }
 
-                    Row(
+                    OutlinedButton(
+                        onClick = { onEdit(p) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        OutlinedButton(onClick = { onEdit(p) }, modifier = Modifier.weight(1f)) {
-                            Text("Editar")
-                        }
-                        OutlinedButton(onClick = { onGrant(p) }, modifier = Modifier.weight(1f)) {
-                            Text("Créditos")
-                        }
+                        Icon(Icons.Filled.Settings, null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Configurar provedor")
                     }
 
-                    TextButton(
-                        onClick = { onDelete(p) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    TextButton(onClick = { onDelete(p) }, modifier = Modifier.fillMaxWidth()) {
                         Text("Encerrar e excluir provedor", color = Danger)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ProviderMiniMetric(label: String, value: Int, color: Color, modifier: Modifier) {
+    Surface(
+        color = color.copy(alpha = .08f),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = .18f)),
+        modifier = modifier
+    ) {
+        Column(
+            Modifier.padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(value.toString(), color = color, fontWeight = FontWeight.Black, fontSize = 19.sp)
+            Text(label, color = Muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -686,6 +865,7 @@ private fun EditPartnerDialog(
     var active by remember(partner.id) { mutableStateOf(partner.status.equals("ACTIVE", true)) }
     var dnsPrimary by remember(partner.id) { mutableStateOf(partner.dnsPrimary.orEmpty()) }
     var dnsSecondary by remember(partner.id) { mutableStateOf(partner.dnsSecondary.orEmpty()) }
+    var activeWindow by remember(partner.id) { mutableStateOf(partner.activeWindowDays.toString()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -713,6 +893,14 @@ private fun EditPartnerDialog(
                     value = dnsSecondary,
                     onValueChange = { dnsSecondary = it },
                     label = { Text("DNS secundário (opcional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+                OutlinedTextField(
+                    value = activeWindow,
+                    onValueChange = { activeWindow = it.filter(Char::isDigit).take(2) },
+                    label = { Text("Dias para considerar aparelho ativo") },
+                    supportingText = { Text("Ex.: 10 dias. Somente o MASTER define esta regra.") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
@@ -746,7 +934,8 @@ private fun EditPartnerDialog(
                                     token,
                                     partner.id,
                                     name.trim(),
-                                    if (active) "ACTIVE" else "BLOCKED"
+                                    if (active) "ACTIVE" else "BLOCKED",
+                                    activeWindow.toIntOrNull()?.coerceIn(1, 60) ?: partner.activeWindowDays
                                 )
                                 if (dnsPrimary.isNotBlank()) {
                                     repo.saveProviderConfig(token, dnsPrimary, dnsSecondary, partner.id)
@@ -862,9 +1051,19 @@ private fun ProviderConfigTab(
                         }
                     }
                     Text("Esse código identifica seus DNS no aplicativo do cliente.", color = Muted, fontSize = 10.sp)
-                    if ((profile?.directClients ?: 0) > 0) {
-                        Text("${profile?.directClients} aparelho(s) já usaram o login por provedor.", color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Ativos em ${profile?.activeWindowDays ?: 10} dias: ${profile?.activeWindow ?: 0} • Total: ${profile?.totalDevices ?: 0}",
+                        color = Green,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "A janela de atividade é definida pelo MASTER e usada para a contagem comercial.",
+                        color = Muted,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
                 }
             }
         }
@@ -905,39 +1104,6 @@ private fun ProviderConfigTab(
                     ) { Text(if (busy) "Salvando..." else "Salvar configuração") }
                     message?.let { Text(it, color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
                     error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CreditsTab(profile: AdminProfile?, history: List<CreditEntry>) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Text("Créditos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("Saldo atual: ${profile?.credits ?: 0}", color = Cyan, fontWeight = FontWeight.Black, fontSize = 30.sp)
-            Text("Ativação anual: ${profile?.annualLicenseCredits ?: 15} créditos por aparelho.", color = Muted, fontSize = 11.sp)
-        }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = Purple.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(15.dp)) {
-                    Text("Pix automático Asaas", color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("A estrutura já está preparada para compra automática. A liberação do Pix será ativada quando a chave da API Asaas for configurada no servidor.", color = Muted, fontSize = 11.sp)
-                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("Comprar créditos por Pix — em preparação") }
-                }
-            }
-        }
-        item { Text("Histórico", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
-        if (history.isEmpty()) item { EmptyCard("Nenhuma movimentação ainda.") }
-        items(history) { h ->
-            Card(colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (h.amount >= 0) "+${h.amount}" else h.amount.toString(), color = if (h.amount >= 0) Green else Danger, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(h.kind, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                        h.note?.let { Text(it, color = Muted, fontSize = 10.sp) }
-                    }
                 }
             }
         }
@@ -1001,37 +1167,6 @@ private fun NewPartnerDialog(token: String, repo: AdminRepository, onDismiss: ()
             }, enabled = !busy) { Text(if (busy) "Criando..." else "Criar") }
         },
         dismissButton = { if (result == null) TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    )
-}
-
-@Composable
-private fun GrantCreditsDialog(partner: PartnerInfo, token: String, repo: AdminRepository, onDismiss: () -> Unit, onSaved: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var amount by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Créditos • ${partner.name}") },
-        text = {
-            Column {
-                Text("Saldo atual: ${partner.credits}", color = Cyan, fontWeight = FontWeight.Bold)
-                OutlinedTextField(value = amount, onValueChange = { amount = it.filter(Char::isDigit).take(6) }, label = { Text("Quantidade a adicionar") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-                error?.let { Text(it, color = Danger, fontSize = 11.sp) }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val n = amount.toIntOrNull() ?: return@Button
-                busy = true
-                scope.launch {
-                    try { withContext(Dispatchers.IO) { repo.grantCredits(token, partner.id, n) }; onSaved() }
-                    catch (e: Throwable) { error = e.message ?: "Falha ao adicionar créditos" }
-                    finally { busy = false }
-                }
-            }, enabled = !busy && (amount.toIntOrNull() ?: 0) > 0) { Text(if (busy) "Salvando..." else "Adicionar") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 

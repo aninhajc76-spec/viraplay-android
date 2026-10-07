@@ -11,6 +11,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
@@ -21,6 +34,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
@@ -106,11 +120,11 @@ fun ActivationScreen(
 }
 
 
-private enum class AccessChoice(val label: String) {
-    PROVIDER("Provedor"),
-    DNS("DNS"),
-    M3U("M3U"),
-    DEVICE("Código")
+private enum class AccessChoice(val label: String, val icon: ImageVector) {
+    PROVIDER("Provedor", Icons.Filled.Storage),
+    DNS("DNS", Icons.Filled.Language),
+    M3U("M3U", Icons.Filled.PlaylistPlay),
+    DEVICE("Código", Icons.Filled.QrCode2)
 }
 
 @Composable
@@ -132,9 +146,11 @@ fun AccessPortalScreen(
     var providerCode by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var showProviderPassword by remember { mutableStateOf(false) }
     var dns by remember { mutableStateOf("") }
     var dnsUsername by remember { mutableStateOf("") }
     var dnsPassword by remember { mutableStateOf("") }
+    var showDnsPassword by remember { mutableStateOf(false) }
     var m3u by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -162,32 +178,53 @@ fun AccessPortalScreen(
                     BrandWordmark(large = true)
                     Spacer(Modifier.weight(1f))
                     onClose?.let {
-                        TextButton(onClick = it) { Text("Fechar") }
+                        IconButton(onClick = it) {
+                            Icon(Icons.Filled.Close, contentDescription = "Fechar", tint = VpCyan)
+                        }
                     }
                 }
                 Text("Escolha como entrar", color = Color.White, fontWeight = FontWeight.Black, fontSize = if (isTv) 28.sp else 24.sp)
                 Text("VPlayo não inclui conteúdo. Use os dados fornecidos pelo seu serviço.", color = VpMuted, fontSize = 11.sp)
 
                 Spacer(Modifier.height(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        listOf(AccessChoice.PROVIDER, AccessChoice.DNS).forEach { item ->
-                            FilterChip(
-                                selected = choice == item,
-                                onClick = { choice = item; error = null; message = null },
-                                label = { Text(item.label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        listOf(AccessChoice.M3U, AccessChoice.DEVICE).forEach { item ->
-                            FilterChip(
-                                selected = choice == item,
-                                onClick = { choice = item; error = null; message = null },
-                                label = { Text(item.label) },
-                                modifier = Modifier.weight(1f)
-                            )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    AccessChoice.entries.forEach { item ->
+                        val selected = choice == item
+                        Surface(
+                            onClick = {
+                                choice = item
+                                error = null
+                                message = null
+                            },
+                            color = if (selected) VpCyan.copy(alpha = .18f) else VpPanelAlt.copy(alpha = .70f),
+                            border = BorderStroke(
+                                if (selected) 2.dp else 1.dp,
+                                if (selected) VpCyan else VpBorder
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = item.label,
+                                    tint = if (selected) VpCyan else Color.White.copy(alpha = .72f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    item.label,
+                                    color = if (selected) Color.White else VpMuted,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
@@ -201,6 +238,7 @@ fun AccessPortalScreen(
                             value = providerCode,
                             onValueChange = { providerCode = it.uppercase().filter(Char::isLetterOrDigit).take(10) },
                             label = { Text("Código do provedor") },
+                            leadingIcon = { Icon(Icons.Filled.Dns, null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                         )
@@ -208,6 +246,7 @@ fun AccessPortalScreen(
                             value = username,
                             onValueChange = { username = it },
                             label = { Text("Usuário") },
+                            leadingIcon = { Icon(Icons.Filled.Person, null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
@@ -215,7 +254,16 @@ fun AccessPortalScreen(
                             value = password,
                             onValueChange = { password = it },
                             label = { Text("Senha") },
-                            visualTransformation = PasswordVisualTransformation(),
+                            leadingIcon = { Icon(Icons.Filled.Lock, null) },
+                            visualTransformation = if (showProviderPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showProviderPassword = !showProviderPassword }) {
+                                    Icon(
+                                        if (showProviderPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (showProviderPassword) "Ocultar senha" else "Mostrar senha"
+                                    )
+                                }
+                            },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
@@ -241,6 +289,7 @@ fun AccessPortalScreen(
                             value = dns,
                             onValueChange = { dns = it },
                             label = { Text("DNS / servidor") },
+                            leadingIcon = { Icon(Icons.Filled.Language, null) },
                             placeholder = { Text("http://servidor.com") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
@@ -249,6 +298,7 @@ fun AccessPortalScreen(
                             value = dnsUsername,
                             onValueChange = { dnsUsername = it },
                             label = { Text("Usuário") },
+                            leadingIcon = { Icon(Icons.Filled.Person, null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
@@ -256,7 +306,16 @@ fun AccessPortalScreen(
                             value = dnsPassword,
                             onValueChange = { dnsPassword = it },
                             label = { Text("Senha") },
-                            visualTransformation = PasswordVisualTransformation(),
+                            leadingIcon = { Icon(Icons.Filled.Lock, null) },
+                            visualTransformation = if (showDnsPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showDnsPassword = !showDnsPassword }) {
+                                    Icon(
+                                        if (showDnsPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (showDnsPassword) "Ocultar senha" else "Mostrar senha"
+                                    )
+                                }
+                            },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
@@ -310,6 +369,7 @@ fun AccessPortalScreen(
                             value = m3u,
                             onValueChange = { m3u = it },
                             label = { Text("URL M3U / Xtream") },
+                            leadingIcon = { Icon(Icons.Filled.PlaylistPlay, null) },
                             minLines = 3,
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                         )
@@ -334,7 +394,11 @@ fun AccessPortalScreen(
                 }
                 message?.let { Text(it, color = VpGreen, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp)) }
                 error?.let { Text(it, color = VpDanger, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp)) }
-                TextButton(onClick = onSupport, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Suporte VPlayo") }
+                TextButton(onClick = onSupport, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    Icon(Icons.Filled.HeadsetMic, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Suporte VPlayo")
+                }
             }
         }
     }
