@@ -177,7 +177,8 @@ private fun TvHome(
         series = db.count(ContentType.SERIES)
     )
 
-    var counts by remember { mutableStateOf(readCounts()) }
+    // Contagens do catálogo são carregadas em IO no LaunchedEffect abaixo.
+    var counts by remember { mutableStateOf(TvHomeCounts(0, 0, 0, 0)) }
     var featured by remember { mutableStateOf<CatalogItem?>(null) }
     var continueItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
     val firstFocus = remember { FocusRequester() }

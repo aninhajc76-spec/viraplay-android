@@ -1,0 +1,12 @@
+VPlayo 3.3.21 / versionCode 54
+HOTFIX FINAL - AUDIO AO VIVO + STARTUP + OVERLAY
+
+- Corrige travada de 10–15 s ao abrir: consultas SQLite saem da thread principal.
+- Home da TV não faz contagens pesadas durante a primeira composição.
+- Ao vivo deixa de forçar automaticamente uma faixa PT alternativa; usa a faixa padrão do stream para preservar sincronismo.
+- Filmes e séries continuam priorizando português.
+- Qualidade automática no celular escolhe uma variante uma vez e não reabre o stream a cada 15 s.
+- Painel preto dos controles fica mais transparente e some mais rápido em VOD.
+- Mantém integralmente o design Premium 3.3.20, Provedores, Ativos, EPG, preview, COMPAT, favoritos, histórico e PIN.
+- Não precisa SQL.
+- Não precisa Worker.

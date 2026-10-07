@@ -299,10 +299,14 @@ fun PlayerScreen(
                 true
             )
             volume = 1f
-            trackSelectionParameters = trackSelectionParameters
-                .buildUpon()
-                .setPreferredAudioLanguages("pt-BR", "pt", "por")
-                .build()
+            // Ao vivo mantém a faixa padrão do stream para preservar A/V sync.
+            // Filmes e séries continuam priorizando português.
+            if (item.type != ContentType.LIVE) {
+                trackSelectionParameters = trackSelectionParameters
+                    .buildUpon()
+                    .setPreferredAudioLanguages("pt-BR", "pt", "por")
+                    .build()
+            }
 
             setMediaItem(MediaItem.fromUri(currentUrl))
             prepare()
@@ -443,12 +447,14 @@ fun PlayerScreen(
         val nextIndex = if (selectedIndex < 0) 0 else selectedIndex + 1
 
         if (nextIndex >= choices.size) {
-            player.trackSelectionParameters = player.trackSelectionParameters
+            val autoBuilder = player.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                .setPreferredAudioLanguages("pt-BR", "pt", "por")
-                .build()
-            audioLabelState = "AUTO / PT"
+            if (currentItem.type != ContentType.LIVE) {
+                autoBuilder.setPreferredAudioLanguages("pt-BR", "pt", "por")
+            }
+            player.trackSelectionParameters = autoBuilder.build()
+            audioLabelState = if (currentItem.type == ContentType.LIVE) "AUTO" else "AUTO / PT"
         } else {
             val choice = choices[nextIndex]
             player.trackSelectionParameters = player.trackSelectionParameters
@@ -532,7 +538,7 @@ fun PlayerScreen(
         delay(80)
         if (controlsVisible) {
             if (isTv) runCatching { controlsFocus.requestFocus() }
-            delay(5_500)
+            delay(if (currentItem.type == ContentType.LIVE) 4_200 else 2_800)
             controlsVisible = false
         } else if (isTv) {
             runCatching { videoFocus.requestFocus() }
@@ -570,7 +576,12 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(currentItem.itemKey, audioTrackCount, compatMode) {
-        if (!compatMode && !portugueseApplied && audioTrackCount > 0) {
+        if (
+            currentItem.type != ContentType.LIVE &&
+            !compatMode &&
+            !portugueseApplied &&
+            audioTrackCount > 0
+        ) {
             portugueseAudioChoice(player.currentTracks)?.let { choice ->
                 player.trackSelectionParameters = player.trackSelectionParameters
                     .buildUpon()
@@ -603,11 +614,9 @@ fun PlayerScreen(
 
     LaunchedEffect(currentItem.itemKey, autoQuality) {
         if (currentItem.type == ContentType.LIVE && autoQuality && !isTv) {
+            // Escolhe a variante uma vez; não reabre o stream continuamente.
             delay(4_000)
-            while (true) {
-                applyAutomaticQuality()
-                delay(15_000)
-            }
+            applyAutomaticQuality()
         }
     }
 
@@ -778,8 +787,8 @@ fun PlayerScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Surface(
-                    color = Color.Black.copy(alpha = if (isTv) 0.78f else 0.82f),
-                    shape = if (isTv) RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp) else RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
+                    color = Color.Black.copy(alpha = if (isTv) 0.52f else 0.56f),
+                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(

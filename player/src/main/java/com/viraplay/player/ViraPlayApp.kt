@@ -67,11 +67,11 @@ fun VPlayoApp() {
     }
 
     var enabled by remember { mutableStateOf(uiStore.lastEnabled()) }
-    var status by remember {
-        mutableStateOf(if (db.hasCatalog()) "${db.countAll()} títulos disponíveis" else "Conectando...")
-    }
+    // A primeira composição não deve abrir/contar o SQLite na thread principal.
+    var status by remember { mutableStateOf("Abrindo VPlayo...") }
+    var hasCatalog by remember { mutableStateOf<Boolean?>(null) }
     var accountInfo by remember { mutableStateOf<XtreamAccountInfo?>(null) }
-    var syncing by remember { mutableStateOf(!db.hasCatalog()) }
+    var syncing by remember { mutableStateOf(true) }
     var catalogVersion by remember { mutableIntStateOf(0) }
     var playbackVersion by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
@@ -86,7 +86,8 @@ fun VPlayoApp() {
     var updateError by remember { mutableStateOf<String?>(null) }
 
 suspend fun refresh(forceCatalog: Boolean) {
-    val hadCatalog = db.hasCatalog()
+    val hadCatalog = withContext(Dispatchers.IO) { db.hasCatalog() }
+    hasCatalog = hadCatalog
     if (!hadCatalog) syncing = true
 
     try {
@@ -144,14 +145,16 @@ suspend fun refresh(forceCatalog: Boolean) {
         accountInfo = withContext(Dispatchers.IO) { repository.accountInfo(remoteUrl) }
         ExpiryNotifier.notifyIfNeeded(context, accountInfo)
 
-        val cachedUrl = db.getMeta("playlist_url")
-        val lastSync = db.getMetaLong("last_sync")
+        val (cachedUrl, lastSync) = withContext(Dispatchers.IO) {
+            db.getMeta("playlist_url") to db.getMetaLong("last_sync")
+        }
         val stale = System.currentTimeMillis() - lastSync > 6L * 60L * 60L * 1000L
         val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
 
         if (needsSync) {
             status = if (hadCatalog) {
-                "${db.countAll()} títulos • atualizando em segundo plano..."
+                val localCount = withContext(Dispatchers.IO) { db.countAll() }
+                "$localCount títulos • atualizando em segundo plano..."
             } else {
                 "Preparando catálogo pela primeira vez..."
             }
@@ -161,15 +164,21 @@ suspend fun refresh(forceCatalog: Boolean) {
                     if (!hadCatalog) scope.launch { status = progress }
                 }
             }
+            hasCatalog = withContext(Dispatchers.IO) { db.hasCatalog() }
             catalogVersion += 1
         }
 
         val source = directStore.description()
-        status = buildHeaderStatus(db.countAll(), accountInfo) + (source?.let { " • $it" } ?: "")
+        val finalCount = withContext(Dispatchers.IO) { db.countAll() }
+        hasCatalog = true
+        status = buildHeaderStatus(finalCount, accountInfo) + (source?.let { " • $it" } ?: "")
     } catch (e: Throwable) {
+        val localCatalog = withContext(Dispatchers.IO) { db.hasCatalog() }
+        hasCatalog = localCatalog
         enabled = false
-        status = if (db.hasCatalog()) {
-            "${db.countAll()} títulos • conexão pendente"
+        status = if (localCatalog) {
+            val localCount = withContext(Dispatchers.IO) { db.countAll() }
+            "$localCount títulos • conexão pendente"
         } else {
             val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
             "Falha: $message"
@@ -236,7 +245,8 @@ suspend fun refresh(forceCatalog: Boolean) {
             // Em TV isso evita disputa de foco e evita o SurfaceView da prévia aparecer
             // como uma segunda imagem por cima do vídeo em tela cheia.
             if (overlay == null) when {
-                !db.hasCatalog() -> AccessPortalScreen(
+                hasCatalog == null -> FastBootScreen(status)
+                hasCatalog == false -> AccessPortalScreen(
                     code = identity.pairingCode,
                     status = status,
                     loading = syncing,
@@ -552,6 +562,29 @@ suspend fun refresh(forceCatalog: Boolean) {
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun FastBootScreen(status: String) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(VpBg),
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            BrandWordmark()
+            CircularProgressIndicator(
+                color = VpCyan,
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(34.dp)
+            )
+            Text(status, color = VpMuted, fontSize = 11.sp)
         }
     }
 }
