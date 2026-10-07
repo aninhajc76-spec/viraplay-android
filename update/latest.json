@@ -1,14 +1,14 @@
 {
-  "versionCode": 50,
-  "versionName": "3.3.17",
+  "versionCode": 51,
+  "versionName": "3.3.18",
   "mandatory": true,
-  "message": "Nova atualização Vplayo disponível.",
-  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.17/ViraPlay-3.3.17.apk",
-  "sha256": "715104950deed2408f59326101a265018dc4af23644c4eb327228c28a500f2a3",
-  "adminVersionCode": 50,
-  "adminVersionName": "3.3.17",
+  "message": "Teste 🌐",
+  "url": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.18/ViraPlay-3.3.18.apk",
+  "sha256": "ac481deda6db40d822bb4f559c1e8f1b55db1bb247ec2d2bb8789d74181d4286",
+  "adminVersionCode": 51,
+  "adminVersionName": "3.3.18",
   "adminMandatory": true,
-  "adminMessage": "Nova atualização Vplayo disponível.",
-  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.17/ViraPlay-ADM-3.3.17.apk",
-  "adminSha256": "a83fe4a8419a8ff6bd0d680ab73534a31c69dc385a3b4118c59bd1643ac639f4"
+  "adminMessage": "Teste 🌐",
+  "adminUrl": "https://github.com/aninhajc76-spec/viraplay-android/releases/download/v3.3.18/ViraPlay-ADM-3.3.18.apk",
+  "adminSha256": "8bd619511080f4cb62f83487ab3c02249b5e5241464cf489cfbcf8bd28b3940f"
 }
