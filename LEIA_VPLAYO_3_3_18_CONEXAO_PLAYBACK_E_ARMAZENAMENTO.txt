@@ -1,0 +1,20 @@
+VPlayo 3.3.18 / versionCode 51
+
+CORREÇÃO DE CONEXÃO E REPRODUÇÃO
+- encerra a prévia antes de abrir o player principal;
+- aguarda 900 ms para o servidor liberar a conexão anterior;
+- evita duas conexões simultâneas em contas IPTV com limite de 1 conexão;
+- Media3 e LibVLC passam a usar o mesmo User-Agent/headers usados nas chamadas que já funcionam com o servidor;
+- se ainda falhar, a mensagem mostra um diagnóstico HTTP sem expor usuário, senha ou URL;
+- mantém o fallback Media3 -> COMPAT da 3.3.17.
+
+ARMAZENAMENTO
+- corrige crescimento acumulado do SQLite após várias sincronizações;
+- o app já apagava gerações antigas, mas o SQLite não devolvia o espaço ao Android;
+- agora o banco é compactado automaticamente quando passa de 180 MB, no máximo uma vez a cada 3 dias.
+
+IMPORTANTE
+- não altera Supabase;
+- não altera Worker;
+- não altera modelo de provedores/ativos;
+- não precisa executar SQL.

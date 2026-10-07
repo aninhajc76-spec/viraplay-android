@@ -43,10 +43,16 @@ fun LivePreviewPlayer(
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
         val http = DefaultHttpDataSource.Factory()
-            .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
+            .setUserAgent("Mozilla/5.0 (Linux; Android) VPlayo/3.2")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(20_000)
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Accept" to "*/*",
+                    "Accept-Encoding" to "identity"
+                )
+            )
 
         ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
@@ -92,8 +98,22 @@ fun LivePreviewPlayer(
         if (!ready && !compatMode && item.url == url) compatMode = true
     }
 
-    DisposableEffect(Unit) {
+    val stopPreviewAction = remember(player, compatEngine) {
+        {
+            runCatching {
+                player.playWhenReady = false
+                player.stop()
+                player.clearMediaItems()
+            }
+            runCatching { compatEngine.stop() }
+        }
+    }
+
+    DisposableEffect(player, compatEngine) {
+        PlaybackSessionCoordinator.registerPreviewStop(stopPreviewAction)
         onDispose {
+            PlaybackSessionCoordinator.unregisterPreviewStop(stopPreviewAction)
+            stopPreviewAction()
             runCatching { player.release() }
             runCatching { compatEngine.release() }
         }

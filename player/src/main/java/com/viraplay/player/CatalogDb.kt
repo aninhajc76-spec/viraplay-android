@@ -13,6 +13,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(
     null,
     1
 ) {
+    private val appContext = context.applicationContext
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -201,6 +202,27 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
+        }
+
+        compactStorageIfNeeded()
+    }
+
+    private fun compactStorageIfNeeded() {
+        val now = System.currentTimeMillis()
+        val last = getMetaLong("last_storage_compact")
+        val dbFile = appContext.getDatabasePath("viraplay_catalog_v3.db")
+
+        // No máximo uma compactação a cada 3 dias e apenas quando o banco
+        // passou de 180 MB. DELETE remove linhas, mas o SQLite não devolve
+        // o espaço ao Android até VACUUM.
+        if (now - last < 3L * 24L * 60L * 60L * 1000L) return
+        if (!dbFile.exists() || dbFile.length() < 180L * 1024L * 1024L) return
+
+        runCatching {
+            val db = writableDatabase
+            db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { }
+            db.execSQL("VACUUM")
+            putMeta("last_storage_compact", now.toString())
         }
     }
 

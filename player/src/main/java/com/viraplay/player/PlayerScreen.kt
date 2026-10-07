@@ -51,7 +51,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.viraplay.shared.ContentType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.videolan.libvlc.util.VLCVideoLayout
 
 private data class ScreenMode(
@@ -232,10 +234,16 @@ fun PlayerScreen(
         }
 
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
+            .setUserAgent("Mozilla/5.0 (Linux; Android) VPlayo/3.2")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(20_000)
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Accept" to "*/*",
+                    "Accept-Encoding" to "identity"
+                )
+            )
         val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -292,9 +300,7 @@ fun PlayerScreen(
                 .build()
 
             setMediaItem(MediaItem.fromUri(currentUrl))
-            prepare()
-            if (startPosition > 0L && item.type != ContentType.LIVE) seekTo(startPosition)
-            playWhenReady = true
+            playWhenReady = false
         }
     }
 
@@ -500,6 +506,22 @@ fun PlayerScreen(
         onBack()
     }
 
+    LaunchedEffect(currentItem.itemKey) {
+        // A interface principal continua composta por baixo do overlay.
+        // Encerra qualquer prévia antes de abrir outro stream para não
+        // estourar contas com limite de 1 conexão simultânea.
+        PlaybackSessionCoordinator.stopPreview()
+        delay(900)
+
+        if (!compatMode && player.mediaItemCount > 0) {
+            player.prepare()
+            if (startPosition > 0L && currentItem.itemKey == item.itemKey && item.type != ContentType.LIVE) {
+                player.seekTo(startPosition)
+            }
+            player.playWhenReady = true
+        }
+    }
+
     LaunchedEffect(Unit) {
         activity?.let { act ->
             WindowCompat.setDecorFitsSystemWindows(act.window, false)
@@ -569,7 +591,13 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
 
-            error = "O VPlayo tentou o modo normal e o modo de compatibilidade, mas o servidor não iniciou este conteúdo."
+            val probe = withContext(Dispatchers.IO) { PlaybackProbe.check(currentUrl) }
+            error = buildString {
+                append("O modo normal e o modo de compatibilidade não conseguiram iniciar este conteúdo.")
+                append(" Diagnóstico: ")
+                append(probe.detail)
+                append(".")
+            }
         }
     }
 
@@ -659,6 +687,7 @@ fun PlayerScreen(
 
     DisposableEffect(player) {
         onDispose {
+            PlaybackSessionCoordinator.stopPreview()
             persistProgress()
             compatEngine.release()
             player.release()
