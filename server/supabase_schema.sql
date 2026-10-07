@@ -147,3 +147,25 @@ begin
   select * from public.viraplay_devices where device_id = p_device_id;
 end;
 $$;
+
+
+-- VPlayo 3.3.15 - PROVEDORES / DNS / LOGIN DIRETO
+alter table public.viraplay_partners
+  add column if not exists dns_primary text,
+  add column if not exists dns_secondary text;
+
+create table if not exists public.viraplay_provider_sessions (
+  id uuid primary key default gen_random_uuid(),
+  provider_id uuid not null references public.viraplay_partners(id) on delete cascade,
+  device_id text not null,
+  platform text,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  unique(provider_id, device_id)
+);
+
+create index if not exists viraplay_provider_sessions_provider_idx
+  on public.viraplay_provider_sessions(provider_id, last_seen_at desc);
+
+alter table public.viraplay_provider_sessions enable row level security;
+-- Sem policy publica. O Worker usa SERVICE_ROLE.

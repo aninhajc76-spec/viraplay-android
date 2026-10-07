@@ -4,8 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 47
-val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.14"
+val vpVersionCode = providers.gradleProperty("viraplayVersionCode").orNull?.toIntOrNull() ?: 48
+val vpVersionName = providers.gradleProperty("viraplayVersionName").orNull ?: "3.3.15"
 
 android {
     namespace = "com.viraplay.player"

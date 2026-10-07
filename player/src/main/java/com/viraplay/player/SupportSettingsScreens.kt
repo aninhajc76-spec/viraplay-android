@@ -105,6 +105,252 @@ fun ActivationScreen(
     }
 }
 
+
+private enum class AccessChoice(val label: String) {
+    PROVIDER("Provedor"),
+    DNS("DNS"),
+    M3U("M3U"),
+    DEVICE("Código")
+}
+
+@Composable
+fun AccessPortalScreen(
+    code: String,
+    status: String,
+    loading: Boolean,
+    isTv: Boolean,
+    onRefresh: () -> Unit,
+    onSupport: () -> Unit,
+    onProviderLogin: suspend (String, String, String) -> Result<String>,
+    onDnsLogin: suspend (String, String, String) -> Result<String>,
+    onM3uLogin: suspend (String) -> Result<String>,
+    onUseDeviceCode: suspend () -> Unit,
+    onClose: (() -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+    var choice by remember { mutableStateOf(AccessChoice.PROVIDER) }
+    var providerCode by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var dns by remember { mutableStateOf("") }
+    var dnsUsername by remember { mutableStateOf("") }
+    var dnsPassword by remember { mutableStateOf("") }
+    var m3u by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    listOf(Color(0xFF0B2B4B), Color(0xFF07152B), VpBg)
+                )
+            )
+            .padding(if (isTv) 34.dp else 20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xF2071831)),
+            border = BorderStroke(1.dp, VpCyan.copy(alpha = .22f)),
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.widthIn(max = if (isTv) 760.dp else 620.dp).fillMaxWidth()
+        ) {
+            Column(Modifier.padding(if (isTv) 30.dp else 22.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BrandWordmark(large = true)
+                    Spacer(Modifier.weight(1f))
+                    onClose?.let {
+                        TextButton(onClick = it) { Text("Fechar") }
+                    }
+                }
+                Text("Escolha como entrar", color = Color.White, fontWeight = FontWeight.Black, fontSize = if (isTv) 28.sp else 24.sp)
+                Text("VPlayo não inclui conteúdo. Use os dados fornecidos pelo seu serviço.", color = VpMuted, fontSize = 11.sp)
+
+                Spacer(Modifier.height(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        listOf(AccessChoice.PROVIDER, AccessChoice.DNS).forEach { item ->
+                            FilterChip(
+                                selected = choice == item,
+                                onClick = { choice = item; error = null; message = null },
+                                label = { Text(item.label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        listOf(AccessChoice.M3U, AccessChoice.DEVICE).forEach { item ->
+                            FilterChip(
+                                selected = choice == item,
+                                onClick = { choice = item; error = null; message = null },
+                                label = { Text(item.label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+                when (choice) {
+                    AccessChoice.PROVIDER -> {
+                        Text("Acesso por provedor", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text("Informe o código do provedor e os dados da sua conta.", color = VpMuted, fontSize = 11.sp)
+                        OutlinedTextField(
+                            value = providerCode,
+                            onValueChange = { providerCode = it.uppercase().filter(Char::isLetterOrDigit).take(10) },
+                            label = { Text("Código do provedor") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                        )
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            label = { Text("Usuário") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Senha") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        Button(
+                            enabled = !busy && providerCode.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
+                            onClick = {
+                                busy = true; error = null; message = "Validando acesso..."
+                                scope.launch {
+                                    val result = onProviderLogin(providerCode, username, password)
+                                    result.onSuccess { message = "Conectado a $it" }
+                                        .onFailure { error = friendlyAccessError(it); message = null }
+                                    busy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                        ) { Text(if (busy) "Conectando..." else "Entrar") }
+                    }
+
+                    AccessChoice.DNS -> {
+                        Text("Acesso direto por DNS", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text("Para quem recebeu DNS, usuário e senha do próprio serviço.", color = VpMuted, fontSize = 11.sp)
+                        OutlinedTextField(
+                            value = dns,
+                            onValueChange = { dns = it },
+                            label = { Text("DNS / servidor") },
+                            placeholder = { Text("http://servidor.com") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                        )
+                        OutlinedTextField(
+                            value = dnsUsername,
+                            onValueChange = { dnsUsername = it },
+                            label = { Text("Usuário") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        OutlinedTextField(
+                            value = dnsPassword,
+                            onValueChange = { dnsPassword = it },
+                            label = { Text("Senha") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        Button(
+                            enabled = !busy && dns.isNotBlank() && dnsUsername.isNotBlank() && dnsPassword.isNotBlank(),
+                            onClick = {
+                                busy = true; error = null; message = "Validando servidor..."
+                                scope.launch {
+                                    val result = onDnsLogin(dns, dnsUsername, dnsPassword)
+                                    result.onSuccess { message = it }
+                                        .onFailure { error = friendlyAccessError(it); message = null }
+                                    busy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                        ) { Text(if (busy) "Conectando..." else "Entrar com DNS") }
+                    }
+
+                    AccessChoice.DEVICE -> {
+                        Text("Ativação por código", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text("Para ativações individuais pelo VPlayo ADM.", color = VpMuted, fontSize = 11.sp)
+                        Spacer(Modifier.height(14.dp))
+                        Surface(color = VpPanelAlt, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                code,
+                                color = Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontSize = if (isTv) 38.sp else 32.sp,
+                                letterSpacing = 4.sp,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)
+                            )
+                        }
+                        Text(status, color = VpMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                            Button(
+                                enabled = !busy && !loading,
+                                onClick = {
+                                    busy = true
+                                    scope.launch { onUseDeviceCode(); busy = false }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Usar código") }
+                            OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.weight(1f)) { Text("Atualizar") }
+                        }
+                    }
+
+                    AccessChoice.M3U -> {
+                        Text("Lista própria", color = VpCyan, fontWeight = FontWeight.Bold)
+                        Text("Cole sua URL M3U ou Xtream completa.", color = VpMuted, fontSize = 11.sp)
+                        OutlinedTextField(
+                            value = m3u,
+                            onValueChange = { m3u = it },
+                            label = { Text("URL M3U / Xtream") },
+                            minLines = 3,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                        )
+                        Button(
+                            enabled = !busy && m3u.trim().startsWith("http", true),
+                            onClick = {
+                                busy = true; error = null; message = "Preparando lista..."
+                                scope.launch {
+                                    val result = onM3uLogin(m3u)
+                                    result.onSuccess { message = it }
+                                        .onFailure { error = friendlyAccessError(it); message = null }
+                                    busy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                        ) { Text(if (busy) "Validando..." else "Adicionar lista") }
+                    }
+                }
+
+                if (loading || busy) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), color = VpCyan)
+                }
+                message?.let { Text(it, color = VpGreen, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp)) }
+                error?.let { Text(it, color = VpDanger, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp)) }
+                TextButton(onClick = onSupport, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Suporte VPlayo") }
+            }
+        }
+    }
+}
+
+private fun friendlyAccessError(error: Throwable): String {
+    val raw = error.message.orEmpty()
+    return when {
+        raw.contains("404") -> "Código do provedor não encontrado."
+        raw.contains("409") -> "O provedor ainda não configurou o DNS."
+        raw.contains("401") || raw.contains("403") -> "Usuário ou senha recusados pelo servidor."
+        raw.isBlank() -> "Não foi possível conectar. Verifique os dados e tente novamente."
+        else -> raw.take(160)
+    }
+}
+
 @Composable
 fun BlockedScreen(code: String, onSupport: () -> Unit, onRefresh: () -> Unit) {
     Column(
@@ -208,10 +454,12 @@ fun SettingsScreen(
     code: String,
     status: String,
     accessText: String?,
+    sourceText: String?,
     isTv: Boolean,
     onBack: () -> Unit,
     onSupport: () -> Unit,
     onRefresh: () -> Unit,
+    onChangeAccess: () -> Unit,
     onParentalUnlocked: () -> Unit
 ) {
     BackHandler(onBack = onBack)
@@ -307,6 +555,11 @@ fun SettingsScreen(
             SettingsCard("Código do aparelho", code)
             accessText?.let { SettingsCard("Vencimento", it) }
             SettingsCard("Versão", "VPlayo ${BuildConfig.VERSION_NAME}")
+            sourceText?.let { SettingsCard("Forma de acesso", it) }
+            OutlinedButton(
+                onClick = onChangeAccess,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Trocar conta / forma de acesso") }
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = VpPanel),

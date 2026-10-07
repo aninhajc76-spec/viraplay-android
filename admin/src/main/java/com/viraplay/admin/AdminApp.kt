@@ -5,6 +5,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -40,7 +43,7 @@ private val Danger = Color(0xFFFF5E78)
 private val Muted = Color(0xFF98A3B8)
 
 private enum class Tab(val label: String) {
-    DASHBOARD("Painel"), ACTIVATE("Ativar"), CLIENTS("Clientes"), PARTNERS("Parceiros"), CREDITS("Créditos"), UPDATES("Atualizações")
+    DASHBOARD("Painel"), ACTIVATE("Ativar"), CLIENTS("Clientes"), PARTNERS("Provedores"), PROVIDER("Servidor"), CREDITS("Créditos"), UPDATES("Atualizações")
 }
 
 @Composable
@@ -103,7 +106,7 @@ private fun Login(token: String, onToken: (String) -> Unit, onLogin: () -> Unit)
         Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(22.dp), modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
             Column(Modifier.padding(22.dp)) {
                 Text("VPlayo ADM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                Text("MASTER e parceiros usam o mesmo aplicativo.", color = Muted, fontSize = 13.sp)
+                Text("MASTER e provedores usam o mesmo aplicativo.", color = Muted, fontSize = 13.sp)
                 OutlinedTextField(
                     value = token,
                     onValueChange = onToken,
@@ -188,7 +191,7 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
         if (currentProfile?.isMaster == true) {
             listOf(Tab.DASHBOARD, Tab.ACTIVATE, Tab.CLIENTS, Tab.PARTNERS, Tab.UPDATES)
         } else {
-            listOf(Tab.DASHBOARD, Tab.ACTIVATE, Tab.CLIENTS, Tab.CREDITS, Tab.UPDATES)
+            listOf(Tab.DASHBOARD, Tab.PROVIDER, Tab.ACTIVATE, Tab.CLIENTS, Tab.CREDITS, Tab.UPDATES)
         }
     }
     if (tab !in tabs) tab = Tab.DASHBOARD
@@ -196,9 +199,13 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
     Scaffold(
         containerColor = Bg,
         topBar = {
-            Column {
+            Column(
+                Modifier.fillMaxWidth().background(
+                    Brush.horizontalGradient(listOf(Color(0xFF05162E), Color(0xFF0B1D3C), Color(0xFF130C2E)))
+                )
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Brand()
@@ -246,6 +253,12 @@ private fun Dashboard(token: String, onLogout: () -> Unit) {
                     onGrant = { grantPartner = it },
                     onEdit = { editPartner = it },
                     onDelete = { deletePartner = it }
+                )
+                Tab.PROVIDER -> ProviderConfigTab(
+                    profile = currentProfile,
+                    token = token,
+                    repo = repo,
+                    onSaved = { reload() }
                 )
                 Tab.CREDITS -> CreditsTab(currentProfile, credits)
                 Tab.UPDATES -> UpdatesTab(
@@ -337,7 +350,8 @@ private fun navGlyph(tab: Tab): String = when (tab) {
     Tab.DASHBOARD -> "ADM"
     Tab.ACTIVATE -> "+"
     Tab.CLIENTS -> "CL"
-    Tab.PARTNERS -> "P"
+    Tab.PARTNERS -> "PV"
+    Tab.PROVIDER -> "DNS"
     Tab.CREDITS -> "CR"
     Tab.UPDATES -> "UPD"
 }
@@ -353,7 +367,7 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
                 when {
                     profile == null -> "Carregando painel..."
                     profile.isMaster -> "Painel MASTER"
-                    else -> "Painel do parceiro"
+                    else -> "Painel do provedor"
                 },
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
@@ -370,7 +384,7 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Metric("Bloqueados", blocked, Danger, Modifier.weight(1f))
-                Metric(if (profile?.isMaster == true) "Parceiros" else "Créditos", if (profile?.isMaster == true) partnerCount else profile?.credits ?: 0, Purple, Modifier.weight(1f))
+                Metric(if (profile?.isMaster == true) "Provedores" else "Créditos", if (profile?.isMaster == true) partnerCount else profile?.credits ?: 0, Purple, Modifier.weight(1f))
             }
         }
         item {
@@ -381,7 +395,7 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
                 Card(colors = CardDefaults.cardColors(containerColor = Cyan.copy(alpha = .08f)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(15.dp)) {
                         Text("Licença anual", color = Cyan, fontWeight = FontWeight.Bold)
-                        Text("Cada nova ativação consome ${profile.annualLicenseCredits} créditos. O aparelho fica vinculado ao seu painel.", color = Muted, fontSize = 11.sp)
+                        Text("Ativações individuais continuam disponíveis. O login por provedor usa o código + DNS configurado na aba Servidor.", color = Muted, fontSize = 11.sp)
                     }
                 }
             }
@@ -391,10 +405,19 @@ private fun DashboardTab(profile: AdminProfile?, devices: List<AdminDevice>, par
 
 @Composable
 private fun Metric(label: String, value: Int, color: Color, modifier: Modifier) {
-    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = modifier) {
-        Column(Modifier.padding(16.dp)) {
-            Text(value.toString(), color = color, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Text(label, color = Muted, fontSize = 11.sp)
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(1.dp, color.copy(alpha = .20f)),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+    ) {
+        Column(
+            Modifier.fillMaxWidth().background(
+                Brush.linearGradient(listOf(color.copy(alpha = .12f), Panel, PanelAlt.copy(alpha = .72f)))
+            ).padding(17.dp)
+        ) {
+            Text(value.toString(), color = color, fontSize = 31.sp, fontWeight = FontWeight.Black)
+            Text(label.uppercase(), color = Color.White.copy(alpha = .74f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -540,8 +563,8 @@ private fun PartnersTab(
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Text("Parceiros", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-            Text("Área exclusiva do MASTER. Copie o acesso, edite, bloqueie ou encerre uma parceria por aqui.", color = Muted, fontSize = 12.sp)
+            Text("Provedores", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+            Text("Área exclusiva do MASTER. Crie o provedor, entregue a chave ADM e acompanhe a configuração de DNS.", color = Muted, fontSize = 12.sp)
 
             if (!backendReady) {
                 Card(
@@ -550,9 +573,9 @@ private fun PartnersTab(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text("Configuração de parceiros pendente", color = Cyan, fontWeight = FontWeight.Bold)
+                        Text("Configuração de provedores pendente", color = Cyan, fontWeight = FontWeight.Bold)
                         Text(
-                            "Publique o Worker atualizado para liberar o gerenciamento de parceiros.",
+                            "Publique o Worker atualizado para liberar o gerenciamento de provedores.",
                             color = Muted,
                             fontSize = 11.sp
                         )
@@ -564,10 +587,10 @@ private fun PartnersTab(
                 onClick = onNew,
                 enabled = backendReady,
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-            ) { Text("Cadastrar parceiro") }
+            ) { Text("Cadastrar provedor") }
         }
 
-        if (partners.isEmpty()) item { EmptyCard("Nenhum parceiro cadastrado.") }
+        if (partners.isEmpty()) item { EmptyCard("Nenhum provedor cadastrado.") }
 
         items(partners, key = { it.id }) { p ->
             Card(
@@ -590,10 +613,23 @@ private fun PartnersTab(
                     }
 
                     Spacer(Modifier.height(8.dp))
-                    Text("Login", color = Muted, fontSize = 9.sp)
+                    Surface(
+                        color = if (p.dnsConfigured) Green.copy(alpha = .10f) else Danger.copy(alpha = .10f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, if (p.dnsConfigured) Green.copy(alpha = .22f) else Danger.copy(alpha = .22f))
+                    ) {
+                        Text(
+                            if (p.dnsConfigured) "DNS configurado • ${p.directClients} acesso(s) por login" else "DNS ainda não configurado",
+                            color = if (p.dnsConfigured) Green else Danger,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Código do provedor", color = Muted, fontSize = 9.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(p.loginCode, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { copyPartnerText(context, "Login", p.loginCode) }) {
+                        TextButton(onClick = { copyPartnerText(context, "Código do provedor", p.loginCode) }) {
                             Text("Copiar")
                         }
                     }
@@ -629,7 +665,7 @@ private fun PartnersTab(
                         onClick = { onDelete(p) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Encerrar e excluir parceria", color = Danger)
+                        Text("Encerrar e excluir provedor", color = Danger)
                     }
                 }
             }
@@ -648,30 +684,47 @@ private fun EditPartnerDialog(
     val scope = rememberCoroutineScope()
     var name by remember(partner.id) { mutableStateOf(partner.name) }
     var active by remember(partner.id) { mutableStateOf(partner.status.equals("ACTIVE", true)) }
+    var dnsPrimary by remember(partner.id) { mutableStateOf(partner.dnsPrimary.orEmpty()) }
+    var dnsSecondary by remember(partner.id) { mutableStateOf(partner.dnsSecondary.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Editar parceiro") },
+        title = { Text("Editar provedor") },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nome do parceiro") },
+                    label = { Text("Nome / identificação") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = dnsPrimary,
+                    onValueChange = { dnsPrimary = it },
+                    label = { Text("DNS principal") },
+                    placeholder = { Text("http://servidor.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+                OutlinedTextField(
+                    value = dnsSecondary,
+                    onValueChange = { dnsSecondary = it },
+                    label = { Text("DNS secundário (opcional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = active, onCheckedChange = { active = it })
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(if (active) "Parceiro ativo" else "Parceiro bloqueado", fontWeight = FontWeight.Bold)
+                        Text(if (active) "Provedor ativo" else "Provedor bloqueado", fontWeight = FontWeight.Bold)
                         Text(
-                            if (active) "Pode entrar no VPlayo ADM."
-                            else "O acesso do parceiro fica bloqueado.",
+                            if (active) "Pode entrar no VPlayo ADM e configurar o DNS."
+                            else "O acesso do provedor e o código ficam bloqueados.",
                             color = Muted,
                             fontSize = 11.sp
                         )
@@ -695,10 +748,13 @@ private fun EditPartnerDialog(
                                     name.trim(),
                                     if (active) "ACTIVE" else "BLOCKED"
                                 )
+                                if (dnsPrimary.isNotBlank()) {
+                                    repo.saveProviderConfig(token, dnsPrimary, dnsSecondary, partner.id)
+                                }
                             }
                             onSaved()
                         } catch (e: Throwable) {
-                            error = e.message ?: "Falha ao salvar parceiro."
+                            error = e.message ?: "Falha ao salvar provedor."
                         } finally {
                             busy = false
                         }
@@ -726,13 +782,13 @@ private fun DeletePartnerDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Excluir parceria?") },
+        title = { Text("Excluir provedor?") },
         text = {
             Column {
-                Text("Parceiro: ${partner.name}")
+                Text("Provedor: ${partner.name}")
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Esta ação é definitiva. O acesso ADM do parceiro será apagado. Os clientes vinculados serão bloqueados e devolvidos ao painel MASTER para você decidir o que fazer com eles.",
+                    "Esta ação é definitiva. A chave ADM e o código do provedor serão apagados. Ativações individuais vinculadas serão bloqueadas e devolvidas ao MASTER.",
                     color = Muted,
                     fontSize = 12.sp
                 )
@@ -751,7 +807,7 @@ private fun DeletePartnerDialog(
                             withContext(Dispatchers.IO) { repo.deletePartner(token, partner.id) }
                             onDeleted()
                         } catch (e: Throwable) {
-                            error = e.message ?: "Falha ao excluir parceiro."
+                            error = e.message ?: "Falha ao excluir provedor."
                         } finally {
                             busy = false
                         }
@@ -763,6 +819,96 @@ private fun DeletePartnerDialog(
             TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancelar") }
         }
     )
+}
+
+
+@Composable
+private fun ProviderConfigTab(
+    profile: AdminProfile?,
+    token: String,
+    repo: AdminRepository,
+    onSaved: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var primary by remember(profile?.dnsPrimary) { mutableStateOf(profile?.dnsPrimary.orEmpty()) }
+    var secondary by remember(profile?.dnsSecondary) { mutableStateOf(profile?.dnsSecondary.orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Servidor do provedor", color = Color.White, fontWeight = FontWeight.Black, fontSize = 25.sp)
+            Text("Configure os DNS uma vez. Os clientes entram usando código do provedor + usuário + senha.", color = Muted, fontSize = 12.sp)
+        }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                border = BorderStroke(1.dp, Cyan.copy(alpha = .22f)),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().background(
+                        Brush.linearGradient(listOf(Cyan.copy(alpha = .10f), Panel, Purple.copy(alpha = .06f)))
+                    ).padding(18.dp)
+                ) {
+                    Text("Código do provedor", color = Muted, fontSize = 10.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(profile?.providerCode ?: "—", color = Cyan, fontSize = 26.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                        if (!profile?.providerCode.isNullOrBlank()) {
+                            TextButton(onClick = { copyPartnerText(context, "Código do provedor", profile!!.providerCode!!) }) { Text("Copiar") }
+                        }
+                    }
+                    Text("Esse código identifica seus DNS no aplicativo do cliente.", color = Muted, fontSize = 10.sp)
+                    if ((profile?.directClients ?: 0) > 0) {
+                        Text("${profile?.directClients} aparelho(s) já usaram o login por provedor.", color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    OutlinedTextField(
+                        value = primary,
+                        onValueChange = { primary = it },
+                        label = { Text("DNS principal") },
+                        placeholder = { Text("http://servidor.com") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = secondary,
+                        onValueChange = { secondary = it },
+                        label = { Text("DNS secundário (opcional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
+                    Text("Se o principal falhar no login, o VPlayo tenta o secundário automaticamente.", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+                    Button(
+                        enabled = !busy && primary.isNotBlank(),
+                        onClick = {
+                            busy = true; error = null; message = null
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { repo.saveProviderConfig(token, primary, secondary) }
+                                    message = "DNS salvo. O código do provedor já está pronto para teste."
+                                    onSaved()
+                                } catch (e: Throwable) {
+                                    error = e.message ?: "Não foi possível salvar o DNS."
+                                } finally { busy = false }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+                    ) { Text(if (busy) "Salvando..." else "Salvar configuração") }
+                    message?.let { Text(it, color = Green, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                    error?.let { Text(it, color = Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -830,14 +976,14 @@ private fun NewPartnerDialog(token: String, repo: AdminRepository, onDismiss: ()
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (result == null) "Novo parceiro" else "Parceiro criado") },
+        title = { Text(if (result == null) "Novo provedor" else "Provedor criado") },
         text = {
             Column {
                 if (result == null) {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome do parceiro/revenda") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Identificação (ex.: Bruno • BRTV Play)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 } else {
-                    Text("${result!!.name}\nLogin: ${result!!.loginCode}\nChave ADM: ${result!!.accessToken}", color = Color.White)
-                    Text("Guarde a chave. Ela dá acesso somente aos clientes deste parceiro.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text("${result!!.name}\nCódigo do provedor: ${result!!.loginCode}\nChave ADM: ${result!!.accessToken}", color = Color.White)
+                    Text("Entregue a chave ADM ao provedor. O código identifica automaticamente os DNS configurados por ele.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
                 }
                 error?.let { Text(it, color = Danger, fontSize = 11.sp) }
             }
@@ -849,7 +995,7 @@ private fun NewPartnerDialog(token: String, repo: AdminRepository, onDismiss: ()
                 busy = true
                 scope.launch {
                     try { result = withContext(Dispatchers.IO) { repo.createPartner(token, name) } }
-                    catch (e: Throwable) { error = e.message ?: "Falha ao criar parceiro" }
+                    catch (e: Throwable) { error = e.message ?: "Falha ao criar provedor" }
                     finally { busy = false }
                 }
             }, enabled = !busy) { Text(if (busy) "Criando..." else "Criar") }

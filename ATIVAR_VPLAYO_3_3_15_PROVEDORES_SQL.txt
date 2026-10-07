@@ -1,0 +1,22 @@
+-- VPlayo 3.3.15 - MIGRACAO PROVEDORES / DNS / LOGIN DIRETO
+-- Execute UMA VEZ no SQL Editor do Supabase antes de publicar o Worker 3.3.15.
+
+alter table public.viraplay_partners
+  add column if not exists dns_primary text,
+  add column if not exists dns_secondary text;
+
+create table if not exists public.viraplay_provider_sessions (
+  id uuid primary key default gen_random_uuid(),
+  provider_id uuid not null references public.viraplay_partners(id) on delete cascade,
+  device_id text not null,
+  platform text,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  unique(provider_id, device_id)
+);
+
+create index if not exists viraplay_provider_sessions_provider_idx
+  on public.viraplay_provider_sessions(provider_id, last_seen_at desc);
+
+alter table public.viraplay_provider_sessions enable row level security;
+-- Sem policy publica: o Cloudflare Worker usa SUPABASE_SERVICE_ROLE.

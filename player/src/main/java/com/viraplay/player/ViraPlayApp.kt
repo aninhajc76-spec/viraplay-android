@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.viraplay.shared.ContentType
@@ -31,16 +32,22 @@ private sealed interface Overlay {
     data class Series(val item: CatalogItem) : Overlay
     data object Support : Overlay
     data object Settings : Overlay
+    data object Access : Overlay
 }
 
 @Composable
 fun VPlayoApp() {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val uiMode = context.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
-    val isTv =
+    val hardwareTv =
         uiMode.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
             context.packageManager.hasSystemFeature("android.software.leanback") ||
             context.packageManager.hasSystemFeature("android.hardware.type.television")
+    val wideLandscape =
+        configuration.screenWidthDp >= 840 &&
+            configuration.screenWidthDp > configuration.screenHeightDp * 1.35f
+    val isTv = hardwareTv || wideLandscape
 
     val identity = remember { DeviceIdentity(context) }
     val db = remember { CatalogDb(context) }
@@ -48,6 +55,7 @@ fun VPlayoApp() {
     val uiStore = remember { UiStateStore(context) }
     val preferences = remember { PlaybackPreferences(context) }
     val updateManager = remember { UpdateManager(context) }
+    val directStore = remember { DirectAccessStore(context) }
     val scope = rememberCoroutineScope()
 
     // Na TV sempre abre na Home. No celular preserva a seção anterior.
@@ -77,69 +85,99 @@ fun VPlayoApp() {
     var updateBusy by remember { mutableStateOf(false) }
     var updateError by remember { mutableStateOf<String?>(null) }
 
-    suspend fun refresh(forceCatalog: Boolean) {
-        val hadCatalog = db.hasCatalog()
-        if (!hadCatalog) syncing = true
+suspend fun refresh(forceCatalog: Boolean) {
+    val hadCatalog = db.hasCatalog()
+    if (!hadCatalog) syncing = true
 
-        try {
-            val cfg = withContext(Dispatchers.IO) {
-                repository.registerIfNeeded(
-                    identity,
-                    if (isTv) "ANDROID_TV" else "ANDROID_MOBILE"
-                )
-                repository.config(identity, forceCatalog)
+    try {
+        val platform = if (hardwareTv) "ANDROID_TV" else if (isTv) "ANDROID_LARGE" else "ANDROID_MOBILE"
+        withContext(Dispatchers.IO) {
+            repository.registerIfNeeded(identity, platform)
+        }
+
+        var direct = directStore.session()
+        val providerSession = direct
+        if (providerSession?.mode == DirectAccessMode.PROVIDER && directStore.shouldRefreshProvider()) {
+            val refreshAttempt = withContext(Dispatchers.IO) {
+                runCatching { ProviderAccessClient.rebuildWithCurrentDns(providerSession) }
             }
+            refreshAttempt.onSuccess { refreshed ->
+                directStore.updateProviderPlaylist(refreshed.provider.name, refreshed.playlistUrl)
+                direct = directStore.session()
+            }.onFailure { error ->
+                directStore.markProviderChecked()
+                val message = error.message.orEmpty()
+                if (message.contains("404") || message.contains("409")) throw error
+            }
+        }
 
+        val remoteUrl: String?
+        if (direct != null) {
+            enabled = true
+            uiStore.setLastEnabled(true)
+            remoteUrl = direct.playlistUrl
+
+            if (direct.mode == DirectAccessMode.PROVIDER && directStore.shouldTouchProvider()) {
+                direct.providerCode?.let { providerCode ->
+                    withContext(Dispatchers.IO) {
+                        ProviderAccessClient.touch(providerCode, identity.deviceId, platform)
+                    }
+                    directStore.markProviderTouched()
+                }
+            }
+        } else {
+            val cfg = withContext(Dispatchers.IO) { repository.config(identity, forceCatalog) }
             enabled = cfg.enabled
             uiStore.setLastEnabled(cfg.enabled)
-
             if (!cfg.enabled) {
-                status = "Acesso bloqueado"
+                status = "Acesso por código ainda não ativado"
                 return
             }
-
-            val remoteUrl = cfg.playlistUrl
-            if (remoteUrl.isNullOrBlank()) {
-                status = "Aguardando ativação"
-                return
-            }
-
-            accountInfo = withContext(Dispatchers.IO) { repository.accountInfo(remoteUrl) }
-            ExpiryNotifier.notifyIfNeeded(context, accountInfo)
-
-            val cachedUrl = db.getMeta("playlist_url")
-            val lastSync = db.getMetaLong("last_sync")
-            val stale = System.currentTimeMillis() - lastSync > 6L * 60L * 60L * 1000L
-            val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
-
-            if (needsSync) {
-                status = if (hadCatalog) {
-                    "${db.countAll()} títulos • atualizando em segundo plano..."
-                } else {
-                    "Preparando catálogo pela primeira vez..."
-                }
-
-                withContext(Dispatchers.IO) {
-                    repository.syncCatalog(remoteUrl) { progress ->
-                        if (!hadCatalog) scope.launch { status = progress }
-                    }
-                }
-                catalogVersion += 1
-            }
-
-            status = buildHeaderStatus(db.countAll(), accountInfo)
-        } catch (e: Throwable) {
-            status = if (db.hasCatalog()) {
-                "${db.countAll()} títulos • modo offline"
-            } else {
-                val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
-                "Falha: $message"
-            }
-        } finally {
-            syncing = false
+            remoteUrl = cfg.playlistUrl
         }
-    }
 
+        if (remoteUrl.isNullOrBlank()) {
+            status = "Escolha uma forma de acesso"
+            return
+        }
+
+        accountInfo = withContext(Dispatchers.IO) { repository.accountInfo(remoteUrl) }
+        ExpiryNotifier.notifyIfNeeded(context, accountInfo)
+
+        val cachedUrl = db.getMeta("playlist_url")
+        val lastSync = db.getMetaLong("last_sync")
+        val stale = System.currentTimeMillis() - lastSync > 6L * 60L * 60L * 1000L
+        val needsSync = forceCatalog || !hadCatalog || cachedUrl != remoteUrl || stale
+
+        if (needsSync) {
+            status = if (hadCatalog) {
+                "${db.countAll()} títulos • atualizando em segundo plano..."
+            } else {
+                "Preparando catálogo pela primeira vez..."
+            }
+
+            withContext(Dispatchers.IO) {
+                repository.syncCatalog(remoteUrl) { progress ->
+                    if (!hadCatalog) scope.launch { status = progress }
+                }
+            }
+            catalogVersion += 1
+        }
+
+        val source = directStore.description()
+        status = buildHeaderStatus(db.countAll(), accountInfo) + (source?.let { " • $it" } ?: "")
+    } catch (e: Throwable) {
+        enabled = false
+        status = if (db.hasCatalog()) {
+            "${db.countAll()} títulos • conexão pendente"
+        } else {
+            val message = (e.message ?: "falha de conexão").replace('\n', ' ').take(120)
+            "Falha: $message"
+        }
+    } finally {
+        syncing = false
+    }
+}
     fun reallyOpen(item: CatalogItem) {
         if (item.type == ContentType.SERIES) {
             overlay = Overlay.Series(item)
@@ -198,18 +236,61 @@ fun VPlayoApp() {
             // Em TV isso evita disputa de foco e evita o SurfaceView da prévia aparecer
             // como uma segunda imagem por cima do vídeo em tela cheia.
             if (overlay == null) when {
+                !db.hasCatalog() -> AccessPortalScreen(
+                    code = identity.pairingCode,
+                    status = status,
+                    loading = syncing,
+                    isTv = isTv,
+                    onRefresh = { scope.launch { refresh(true) } },
+                    onSupport = { overlay = Overlay.Support },
+                    onProviderLogin = { providerCode, username, password ->
+                        runCatching {
+                            val login = withContext(Dispatchers.IO) { ProviderAccessClient.login(providerCode, username, password) }
+                            directStore.saveProvider(login.provider.code, login.provider.name, login.playlistUrl)
+                            withContext(Dispatchers.IO) {
+                                ProviderAccessClient.touch(
+                                    login.provider.code,
+                                    identity.deviceId,
+                                    if (hardwareTv) "ANDROID_TV" else if (isTv) "ANDROID_LARGE" else "ANDROID_MOBILE"
+                                )
+                            }
+                            directStore.markProviderTouched()
+                            refresh(true)
+                            login.provider.name
+                        }
+                    },
+                    onDnsLogin = { dns, username, password ->
+                        runCatching {
+                            val playlist = withContext(Dispatchers.IO) { ProviderAccessClient.loginDirectDns(dns, username, password) }
+                            val label = runCatching { java.net.URI(dns.trim().let { if (it.startsWith("http", true)) it else "http://$it" }).host }.getOrNull() ?: "Servidor"
+                            directStore.saveDns(playlist, label)
+                            refresh(true)
+                            "Conectado ao servidor"
+                        }
+                    },
+                    onM3uLogin = { playlist ->
+                        runCatching {
+                            val clean = playlist.trim()
+                            require(clean.startsWith("http", true)) { "Cole uma URL válida iniciando com http:// ou https://" }
+                            SourceResolver.xtreamFromPlaylist(clean)?.let {
+                                val info = withContext(Dispatchers.IO) { repository.accountInfo(clean) }
+                                require(info != null) { "Não foi possível validar esse acesso Xtream." }
+                            }
+                            directStore.saveM3u(clean)
+                            refresh(true)
+                            "Lista adicionada com sucesso"
+                        }
+                    },
+                    onUseDeviceCode = {
+                        directStore.clear()
+                        refresh(true)
+                    }
+                )
+
                 !enabled -> BlockedScreen(
                     code = identity.pairingCode,
                     onSupport = { overlay = Overlay.Support },
                     onRefresh = { scope.launch { refresh(false) } }
-                )
-
-                !db.hasCatalog() -> ActivationScreen(
-                    code = identity.pairingCode,
-                    status = status,
-                    loading = syncing,
-                    onRefresh = { scope.launch { refresh(true) } },
-                    onSupport = { overlay = Overlay.Support }
                 )
 
                 isTv -> TvShell(
@@ -289,11 +370,59 @@ fun VPlayoApp() {
                     code = identity.pairingCode,
                     status = status,
                     accessText = accountDisplay(accountInfo),
+                    sourceText = directStore.description() ?: "Ativação por código",
                     isTv = isTv,
                     onBack = { overlay = null },
                     onSupport = { overlay = Overlay.Support },
                     onRefresh = { scope.launch { refresh(true) } },
+                    onChangeAccess = { overlay = Overlay.Access },
                     onParentalUnlocked = { adultUnlocked = true }
+                )
+
+                Overlay.Access -> AccessPortalScreen(
+                    code = identity.pairingCode,
+                    status = status,
+                    loading = syncing,
+                    isTv = isTv,
+                    onRefresh = { scope.launch { refresh(true) } },
+                    onSupport = { overlay = Overlay.Support },
+                    onProviderLogin = { providerCode, username, password ->
+                        runCatching {
+                            val login = withContext(Dispatchers.IO) { ProviderAccessClient.login(providerCode, username, password) }
+                            directStore.saveProvider(login.provider.code, login.provider.name, login.playlistUrl)
+                            withContext(Dispatchers.IO) { ProviderAccessClient.touch(login.provider.code, identity.deviceId, if (hardwareTv) "ANDROID_TV" else if (isTv) "ANDROID_LARGE" else "ANDROID_MOBILE") }
+                            directStore.markProviderTouched()
+                            refresh(true)
+                            overlay = null
+                            login.provider.name
+                        }
+                    },
+                    onDnsLogin = { dns, username, password ->
+                        runCatching {
+                            val playlist = withContext(Dispatchers.IO) { ProviderAccessClient.loginDirectDns(dns, username, password) }
+                            val label = runCatching { java.net.URI(dns.trim().let { if (it.startsWith("http", true)) it else "http://$it" }).host }.getOrNull() ?: "Servidor"
+                            directStore.saveDns(playlist, label)
+                            refresh(true)
+                            "Conectado ao servidor"
+                        }
+                    },
+                    onM3uLogin = { playlist ->
+                        runCatching {
+                            val clean = playlist.trim()
+                            require(clean.startsWith("http", true)) { "Cole uma URL válida iniciando com http:// ou https://" }
+                            SourceResolver.xtreamFromPlaylist(clean)?.let { require(withContext(Dispatchers.IO) { repository.accountInfo(clean) } != null) { "Não foi possível validar esse acesso Xtream." } }
+                            directStore.saveM3u(clean)
+                            refresh(true)
+                            overlay = null
+                            "Lista adicionada com sucesso"
+                        }
+                    },
+                    onUseDeviceCode = {
+                        directStore.clear()
+                        refresh(true)
+                        overlay = null
+                    },
+                    onClose = { overlay = null }
                 )
 
                 null -> Unit

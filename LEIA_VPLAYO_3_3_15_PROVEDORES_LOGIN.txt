@@ -1,0 +1,51 @@
+VPlayo 3.3.15 / versionCode 48
+
+OBJETIVO DESTA VERSÃO
+- Preparar o VPlayo para parceria com provedores/servidores em escala.
+- MASTER continua com controle total do VPlayo ADM.
+- Área “Parceiros” passa a aparecer como “Provedores”.
+- MASTER cria o provedor e o sistema gera automaticamente:
+  1) Código do provedor
+  2) Chave de acesso do VPlayo ADM
+- O provedor entra no mesmo VPlayo ADM e configura:
+  - DNS principal
+  - DNS secundário opcional
+- No cliente VPlayo ficam disponíveis 4 formas de acesso:
+  1) Código do provedor + usuário + senha
+  2) DNS + usuário + senha
+  3) URL M3U / Xtream própria
+  4) Código do aparelho (modelo atual)
+
+LOGIN POR PROVEDOR
+- O cliente não precisa digitar DNS.
+- O código do provedor consulta a configuração no nosso Worker.
+- VPlayo testa o DNS principal e, se necessário, o secundário.
+- Usuário e senha são validados diretamente no servidor Xtream.
+- A senha do IPTV NÃO é enviada para o nosso Worker.
+- O Worker recebe apenas o código do provedor e registra o aparelho para contagem.
+
+ADM 3.3.15
+- Visual do topo e métricas refinado.
+- MASTER: Provedores, código, chave ADM, status do DNS, acessos por login.
+- Provedor: nova aba “Servidor” para cadastrar DNS.
+- MASTER também consegue editar o DNS de um provedor.
+
+RESPONSIVIDADE
+- Emuladores/caixas Android com tela muito larga passam a usar a interface de TV quando apropriado.
+
+MANTIDO
+- Compatibilidade de áudio/vídeo 3.3.14
+- EPG e prévia
+- Ícones da Home TV
+- Atualização pelo próprio app
+- Favoritos, histórico, PIN, qualidades e demais funções existentes
+
+PASSOS PARA ATIVAR
+1. Executar ATIVAR_VPLAYO_3_3_15_PROVEDORES_SQL.txt no SQL Editor do Supabase (uma única vez).
+2. Importar este ZIP pelo workflow “Importar projeto ViraPlay”.
+3. Rodar “Publicar Worker VPlayo”.
+4. Rodar “Publicar atualização ViraPlay”.
+5. No VPlayo ADM MASTER, criar “Bruno • BRTV Play”.
+6. Copiar a chave ADM e o código do provedor.
+7. Bruno entra no ADM, aba Servidor, e cadastra os DNS.
+8. No VPlayo cliente, escolher Provedor e testar código + usuário + senha.

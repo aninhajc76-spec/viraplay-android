@@ -32,7 +32,7 @@ async function actor(req, env) {
 
   const rows = await sb(
     env,
-    `viraplay_partners?access_token=eq.${encodeURIComponent(token)}&status=eq.ACTIVE&select=id,name,credits,login_code,status&limit=1`
+    `viraplay_partners?access_token=eq.${encodeURIComponent(token)}&status=eq.ACTIVE&select=id,name,credits,login_code,status,dns_primary,dns_secondary&limit=1`
   );
   if (!rows?.length) return null;
   return { role: "PARTNER", ...rows[0] };
@@ -46,6 +46,19 @@ function randomToken(prefix = "VP") {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
+function normalizeDns(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  const parsed = new URL(withScheme);
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("invalid_dns_protocol");
+  return `${parsed.protocol}//${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "")}`;
+}
+
+function providerCode() {
+  return `VP${String(Math.floor(100000 + Math.random() * 900000))}`;
+}
+
 async function rpc(env, fn, body) {
   return sb(env, `rpc/${fn}`, { method: "POST", body: JSON.stringify(body) });
 }
@@ -57,7 +70,7 @@ export default {
 
     try {
       if (req.method === "GET" && url.pathname === "/") {
-        return json({ name: "VPlayo API", ok: true, version: "3.3.13" });
+        return json({ name: "VPlayo API", ok: true, version: "3.3.15" });
       }
 
       if (req.method === "POST" && url.pathname === "/api/register") {
@@ -95,6 +108,48 @@ export default {
         });
       }
 
+
+if (req.method === "GET" && url.pathname === "/api/provider/resolve") {
+  const code = safeCode(url.searchParams.get("code"));
+  if (!code) return json({ error: "missing_provider_code" }, 400);
+  const rows = await sb(
+    env,
+    `viraplay_partners?login_code=eq.${encodeURIComponent(code)}&status=eq.ACTIVE&select=id,name,login_code,dns_primary,dns_secondary&limit=1`
+  );
+  if (!rows?.length) return json({ error: "provider_not_found" }, 404);
+  const provider = rows[0];
+  if (!provider.dns_primary) return json({ error: "provider_not_configured" }, 409);
+  return json({
+    provider_code: provider.login_code,
+    name: provider.name,
+    dns_primary: provider.dns_primary,
+    dns_secondary: provider.dns_secondary || null
+  });
+}
+
+if (req.method === "POST" && url.pathname === "/api/provider/session") {
+  const b = await req.json();
+  const code = safeCode(b.provider_code);
+  const deviceId = String(b.device_id || "").trim();
+  if (!code || !deviceId) return json({ error: "missing_fields" }, 400);
+  const rows = await sb(
+    env,
+    `viraplay_partners?login_code=eq.${encodeURIComponent(code)}&status=eq.ACTIVE&select=id&limit=1`
+  );
+  if (!rows?.length) return json({ error: "provider_not_found" }, 404);
+  await sb(env, "viraplay_provider_sessions?on_conflict=provider_id,device_id", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify({
+      provider_id: rows[0].id,
+      device_id: deviceId,
+      platform: String(b.platform || "ANDROID").slice(0, 40),
+      last_seen_at: new Date().toISOString()
+    })
+  });
+  return json({ ok: true });
+}
+
       // Asaas: endpoint reservado. So passa a operar quando as credenciais forem configuradas.
       if (req.method === "POST" && url.pathname === "/api/payments/asaas/webhook") {
         if (!env.ASAAS_WEBHOOK_TOKEN) return json({ error: "asaas_not_configured" }, 503);
@@ -112,11 +167,20 @@ export default {
       const annualCost = Math.max(1, Number(env.ANNUAL_LICENSE_CREDITS || 15));
 
       if (req.method === "GET" && url.pathname === "/api/admin/profile") {
+        let directClients = 0;
+        if (who.role === "PARTNER") {
+          const sessions = await sb(env, `viraplay_provider_sessions?provider_id=eq.${encodeURIComponent(who.id)}&select=device_id`) || [];
+          directClients = new Set(sessions.map(s => s.device_id)).size;
+        }
         return json({
           role: who.role,
           name: who.name,
           credits: Number(who.credits || 0),
-          annual_license_credits: annualCost
+          annual_license_credits: annualCost,
+          provider_code: who.login_code || null,
+          dns_primary: who.dns_primary || null,
+          dns_secondary: who.dns_secondary || null,
+          direct_clients: directClients
         });
       }
 
@@ -206,11 +270,23 @@ export default {
 
       if (req.method === "GET" && url.pathname === "/api/admin/partners") {
         if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);
-        const partners = await sb(env, "viraplay_partners?select=id,name,login_code,access_token,status,credits&order=created_at.desc") || [];
-        const devices = await sb(env, "viraplay_devices?partner_id=not.is.null&select=partner_id") || [];
-        const counts = {};
-        for (const d of devices) counts[d.partner_id] = (counts[d.partner_id] || 0) + 1;
-        return json(partners.map(p => ({ ...p, clients: counts[p.id] || 0 })));
+        const partners = await sb(env, "viraplay_partners?select=id,name,login_code,access_token,status,credits,dns_primary,dns_secondary&order=created_at.desc") || [];
+        const devices = await sb(env, "viraplay_devices?partner_id=not.is.null&select=partner_id,device_id") || [];
+        const sessions = await sb(env, "viraplay_provider_sessions?select=provider_id,device_id") || [];
+        const deviceSets = {};
+        const directSets = {};
+        for (const d of devices) {
+          if (!deviceSets[d.partner_id]) deviceSets[d.partner_id] = new Set();
+          deviceSets[d.partner_id].add(d.device_id);
+        }
+        for (const d of sessions) {
+          if (!directSets[d.provider_id]) directSets[d.provider_id] = new Set();
+          directSets[d.provider_id].add(d.device_id);
+        }
+        return json(partners.map(p => {
+          const all = new Set([...(deviceSets[p.id] || []), ...(directSets[p.id] || [])]);
+          return { ...p, clients: all.size, direct_clients: (directSets[p.id] || new Set()).size };
+        }));
       }
 
       if (req.method === "POST" && url.pathname === "/api/admin/partners/create") {
@@ -218,7 +294,7 @@ export default {
         const b = await req.json();
         const name = String(b.name || "").trim();
         if (!name) return json({ error: "missing_name" }, 400);
-        const loginCode = safeCode(`P${Math.random().toString(36).slice(2, 8)}`);
+        const loginCode = providerCode();
         const accessToken = randomToken("VPP");
         const rows = await sb(env, "viraplay_partners", {
           method: "POST",
@@ -284,6 +360,41 @@ export default {
         if (!removed?.length) return json({ error: "partner_not_found" }, 404);
         return json({ ok: true, deleted: true });
       }
+
+
+if (req.method === "POST" && url.pathname === "/api/admin/provider/config") {
+  const b = await req.json();
+  let targetId = who.id;
+  if (who.role === "MASTER") {
+    targetId = String(b.partner_id || "").trim();
+    if (!targetId) return json({ error: "missing_partner_id" }, 400);
+  }
+
+  let primary;
+  let secondary;
+  try {
+    primary = normalizeDns(b.dns_primary);
+    secondary = normalizeDns(b.dns_secondary);
+  } catch (_) {
+    return json({ error: "invalid_dns" }, 400);
+  }
+  if (!primary) return json({ error: "missing_dns_primary" }, 400);
+
+  const rows = await sb(
+    env,
+    `viraplay_partners?id=eq.${encodeURIComponent(targetId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        dns_primary: primary,
+        dns_secondary: secondary,
+        updated_at: new Date().toISOString()
+      })
+    }
+  );
+  if (!rows?.length) return json({ error: "provider_not_found" }, 404);
+  return json({ ok: true, provider: rows[0] });
+}
 
       if (req.method === "POST" && url.pathname === "/api/admin/partners/credits") {
         if (who.role !== "MASTER") return json({ error: "forbidden" }, 403);

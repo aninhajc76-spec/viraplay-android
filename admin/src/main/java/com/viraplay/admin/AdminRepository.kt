@@ -22,7 +22,11 @@ class AdminRepository {
                 role = o.optString("role", "PARTNER"),
                 name = o.optString("name", "Parceiro"),
                 credits = o.optInt("credits", 0),
-                annualLicenseCredits = o.optInt("annual_license_credits", 15)
+                annualLicenseCredits = o.optInt("annual_license_credits", 15),
+                providerCode = o.optString("provider_code").takeIf { it.isNotBlank() && it != "null" },
+                dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
+                dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
+                directClients = o.optInt("direct_clients", 0)
             )
         } catch (e: Throwable) {
             val message = e.message.orEmpty()
@@ -157,7 +161,10 @@ class AdminRepository {
                 accessToken = o.optString("access_token"),
                 status = o.optString("status", "ACTIVE"),
                 credits = o.optInt("credits", 0),
-                clients = o.optInt("clients", 0)
+                clients = o.optInt("clients", 0),
+                dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
+                dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
+                directClients = o.optInt("direct_clients", 0)
             )
         }
     }
@@ -177,7 +184,10 @@ class AdminRepository {
             accessToken = o.optString("access_token"),
             status = o.optString("status", "ACTIVE"),
             credits = o.optInt("credits", 0),
-            clients = o.optInt("clients", 0)
+            clients = o.optInt("clients", 0),
+            dnsPrimary = o.optString("dns_primary").takeIf { it.isNotBlank() && it != "null" },
+            dnsSecondary = o.optString("dns_secondary").takeIf { it.isNotBlank() && it != "null" },
+            directClients = o.optInt("direct_clients", 0)
         )
     }
 
@@ -198,6 +208,19 @@ class AdminRepository {
             JSONObject().put("partner_id", partnerId),
             auth(token)
         )
+    }
+
+    fun saveProviderConfig(
+        token: String,
+        dnsPrimary: String,
+        dnsSecondary: String?,
+        partnerId: String? = null
+    ) {
+        val body = JSONObject()
+            .put("dns_primary", dnsPrimary.trim())
+            .put("dns_secondary", dnsSecondary?.trim()?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
+        partnerId?.let { body.put("partner_id", it) }
+        Http.postJson("${AppConfig.SERVER_BASE_URL}/api/admin/provider/config", body, auth(token))
     }
 
     fun grantCredits(token: String, partnerId: String, amount: Int, note: String? = null) {

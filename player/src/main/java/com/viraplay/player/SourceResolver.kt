@@ -3,6 +3,14 @@ package com.viraplay.player
 import java.net.URLDecoder
 
 object SourceResolver {
+    fun buildXtreamPlaylist(baseUrl: String, username: String, password: String, output: String = "mpegts"): String {
+        val base = baseUrl.trim().trimEnd('/')
+        val user = java.net.URLEncoder.encode(username.trim(), "UTF-8")
+        val pass = java.net.URLEncoder.encode(password.trim(), "UTF-8")
+        val safeOutput = if (output.equals("hls", true)) "hls" else "mpegts"
+        return "$base/get.php?username=$user&password=$pass&type=m3u_plus&output=$safeOutput"
+    }
+
     fun xtreamFromPlaylist(url: String): XtreamCredentials? {
         val clean = url.trim()
         val qIndex = clean.indexOf('?')
