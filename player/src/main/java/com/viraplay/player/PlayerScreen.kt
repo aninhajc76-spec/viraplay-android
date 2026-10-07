@@ -51,9 +51,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.viraplay.shared.ContentType
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import org.videolan.libvlc.util.VLCVideoLayout
 
 private data class ScreenMode(
@@ -234,16 +232,10 @@ fun PlayerScreen(
         }
 
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Linux; Android) VPlayo/3.2")
+            .setUserAgent("VPlayo/${BuildConfig.VERSION_NAME} Android")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(20_000)
-            .setDefaultRequestProperties(
-                mapOf(
-                    "Accept" to "*/*",
-                    "Accept-Encoding" to "identity"
-                )
-            )
         val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -252,7 +244,8 @@ fun PlayerScreen(
             .apply {
             addListener(object : Player.Listener {
                 override fun onPlayerError(playbackException: PlaybackException) {
-                    // Se o modo COMPAT já assumiu, ignore erros tardios do Media3.
+                    // Se o COMPAT já assumiu a reprodução, ignore erros atrasados
+                    // do Media3 para não colocar alerta por cima de um vídeo tocando.
                     if (compatMode) return
 
                     val raw = buildString {
@@ -261,17 +254,29 @@ fun PlayerScreen(
                         append(playbackException.cause?.message.orEmpty())
                     }
 
-                    // Qualquer falha real do Media3 tenta o motor de compatibilidade.
-                    // O alerta só aparece se o COMPAT também não iniciar.
-                    error = null
-                    audioLabelState = if (
+                    val decoderProblem =
                         raw.contains("MediaCodec", true) ||
                         raw.contains("VideoRenderer", true) ||
                         raw.contains("AudioRenderer", true) ||
                         raw.contains("Decoder", true) ||
                         raw.contains("format_supported=no", true)
-                    ) "COMPAT" else "AUTO → COMPAT"
-                    compatMode = true
+
+                    // Igual ao comportamento que vinha funcionando: COMPAT somente
+                    // para incompatibilidade real de codec/decoder, não para todo erro
+                    // de rede/fonte.
+                    if (decoderProblem) {
+                        error = null
+                        audioLabelState = "COMPAT"
+                        compatMode = true
+                        return
+                    }
+
+                    error = when {
+                        raw.contains("403", true) || raw.contains("401", true) ->
+                            "O servidor recusou esta reprodução. Verifique se a conta já está em uso em outro aparelho."
+                        else ->
+                            "Não foi possível reproduzir este conteúdo. Tente novamente."
+                    }
                 }
 
                 override fun onIsPlayingChanged(value: Boolean) {
@@ -300,7 +305,9 @@ fun PlayerScreen(
                 .build()
 
             setMediaItem(MediaItem.fromUri(currentUrl))
-            playWhenReady = false
+            prepare()
+            if (startPosition > 0L && item.type != ContentType.LIVE) seekTo(startPosition)
+            playWhenReady = true
         }
     }
 
@@ -506,22 +513,6 @@ fun PlayerScreen(
         onBack()
     }
 
-    LaunchedEffect(currentItem.itemKey) {
-        // A interface principal continua composta por baixo do overlay.
-        // Encerra qualquer prévia antes de abrir outro stream para não
-        // estourar contas com limite de 1 conexão simultânea.
-        PlaybackSessionCoordinator.stopPreview()
-        delay(900)
-
-        if (!compatMode && player.mediaItemCount > 0) {
-            player.prepare()
-            if (startPosition > 0L && currentItem.itemKey == item.itemKey && item.type != ContentType.LIVE) {
-                player.seekTo(startPosition)
-            }
-            player.playWhenReady = true
-        }
-    }
-
     LaunchedEffect(Unit) {
         activity?.let { act ->
             WindowCompat.setDecorFitsSystemWindows(act.window, false)
@@ -574,29 +565,6 @@ fun PlayerScreen(
             compatEngine.selectPortugueseAudio()?.let {
                 compatAudioLabel = it
                 audioLabelState = "COMPAT • $it"
-            }
-        }
-    }
-
-    LaunchedEffect(compatMode, currentUrl, compatStartedForUrl) {
-        if (!compatMode || compatStartedForUrl != currentUrl) return@LaunchedEffect
-
-        delay(12_000)
-
-        if (compatMode && compatStartedForUrl == currentUrl && !compatEngine.isPlaying()) {
-            if (currentItem.type == ContentType.LIVE && currentUrl.endsWith(".ts", ignoreCase = true)) {
-                currentUrl = currentUrl.dropLast(3) + ".m3u8"
-                compatStartedForUrl = null
-                error = null
-                return@LaunchedEffect
-            }
-
-            val probe = withContext(Dispatchers.IO) { PlaybackProbe.check(currentUrl) }
-            error = buildString {
-                append("O modo normal e o modo de compatibilidade não conseguiram iniciar este conteúdo.")
-                append(" Diagnóstico: ")
-                append(probe.detail)
-                append(".")
             }
         }
     }
@@ -687,7 +655,6 @@ fun PlayerScreen(
 
     DisposableEffect(player) {
         onDispose {
-            PlaybackSessionCoordinator.stopPreview()
             persistProgress()
             compatEngine.release()
             player.release()

@@ -18,7 +18,6 @@ class CompatVlcEngine(context: Context) {
         context.applicationContext,
         arrayListOf(
             "--network-caching=1800",
-            "--http-user-agent=Mozilla/5.0 (Linux; Android) VPlayo/3.2",
             "--audio-time-stretch",
             "--no-video-title-show"
         )
@@ -52,7 +51,6 @@ class CompatVlcEngine(context: Context) {
         media.setHWDecoderEnabled(true, false)
         media.addOption(":network-caching=1800")
         media.addOption(":http-reconnect=true")
-        media.addOption(":http-user-agent=Mozilla/5.0 (Linux; Android) VPlayo/3.2")
         media.addOption(":clock-jitter=0")
         media.addOption(":clock-synchro=0")
 

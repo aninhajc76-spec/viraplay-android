@@ -1,0 +1,20 @@
+VPlayo 3.3.18 / versionCode 51
+
+CORREÇÃO DE REPRODUÇÃO COM BASE NA 3.3.13
+- restaurada a lógica estável de erro/retry do Media3;
+- removido o comportamento da 3.3.17 que mandava QUALQUER erro para o LibVLC;
+- COMPAT continua existindo para decoder/codec ou áudio realmente incompatível;
+- erros atrasados do Media3 são ignorados quando o COMPAT já está tocando;
+- removido o watchdog de 12 segundos que podia declarar falha mesmo durante buffering;
+- LivePreview voltou ao componente simples usado na 3.3.13/3.3.16;
+- mantém Provedores, Ativos, ADM premium, login por Provedor/DNS/M3U/Código e demais funções atuais.
+
+ANÁLISE DAS VERSÕES
+- 3.3.13: player principal Media3, fluxo estável.
+- 3.3.14: primeira grande mudança no PlayerScreen; entrou LibVLC/COMPAT e houve 305 linhas alteradas.
+- 3.3.15: acrescentou acesso por Provedor/DNS/M3U, sem alterar PlayerScreen.
+- 3.3.16: não alterou PlayerScreen/LivePreview.
+- 3.3.17: alterou novamente PlayerScreen e LivePreview, passando qualquer erro para COMPAT e adicionando watchdog.
+- 3.3.18 anterior falhou na compilação em LivePreview.kt; este pacote substitui aquela tentativa.
+
+Não precisa SQL nem Worker.
